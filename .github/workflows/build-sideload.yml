@@ -1,4 +1,4 @@
-name: Build Sideload Package
+name: Build Sideload Artifacts
 
 on:
   workflow_dispatch:
@@ -9,37 +9,11 @@ on:
         default: "1.0.0.0"
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
 
 jobs:
-  generate-notes:
-    if: github.actor == 'Richasy'
-    runs-on: self-hosted
-    outputs:
-      notes_zh: ${{ steps.gen_notes.outputs.release_notes_zh }}
-      success: ${{ steps.gen_notes.outcome == 'success' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate Release Notes
-        id: gen_notes
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          ./.github/scripts/generate-release-notes.ps1 `
-            -Endpoint "${{ secrets.OAI_ENDPOINT }}" `
-            -ApiKey "${{ secrets.OAI_KEY }}" `
-            -Model "${{ secrets.OAI_MODEL }}"
-
   build:
-    needs: generate-notes
-    runs-on: self-hosted
-    if: github.actor == 'Richasy'
-
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +26,8 @@ jobs:
       Manifest_Path: src/Desktop/BiliCopilot.UI/Package.appxmanifest
       Configuration: ${{ matrix.configuration }}
       Platform: ${{ matrix.platform }}
+      Cert_Subject: CN=Kokoro.BiliCopilot
+      Cert_Password: BiliCopilot123
 
     steps:
       - name: Checkout
@@ -71,90 +47,79 @@ jobs:
           manifest-path: ${{ env.Manifest_Path }}
           gh-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Application
-        uses: ./.github/actions/build-app
-        with:
-          project-path: ${{ env.Project_Path }}
-          configuration: ${{ env.Configuration }}
-          platform: ${{ env.Platform }}
-          sideload: "true"
+      - name: Generate sideload certificate
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pfx = Join-Path $env:GITHUB_WORKSPACE "src\Desktop\BiliCopilot.UI\BiliCopilot.UI_TemporaryKey.pfx"
+          $cer = Join-Path $env:GITHUB_WORKSPACE "src\Desktop\BiliCopilot.UI\BiliCopilot.UI_TemporaryKey.cer"
+          $password = ConvertTo-SecureString $env:Cert_Password -Force -AsPlainText
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject $env:Cert_Subject `
+            -FriendlyName "BiliCopilot Sideload" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -KeyExportPolicy Exportable `
+            -NotAfter (Get-Date).AddYears(2)
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password -Force | Out-Null
+          Export-Certificate -Cert $cert -FilePath $cer -Force | Out-Null
 
-      - name: Compress Artifacts
+      - name: Build and package
         shell: pwsh
         run: |
-          $version = "${{ inputs.version }}"
-          $platform = "${{ env.Platform }}"
-          $repoName = "BiliCopilot"
-          $sourceDir = "${{ github.workspace }}\FinalPackages"
-          $zipName = "${repoName}_${version}_${platform}.zip"
-          $zipPath = Join-Path $sourceDir $zipName
-
-          # Copy Guide
-          Copy-Item "docs/sideload-guide.txt" -Destination (Join-Path $sourceDir "安装说明.txt")
-
-          # Copy Install Script
-          Copy-Item "scripts/Install.ps1" -Destination (Join-Path $sourceDir "Install.ps1")
-
-          Write-Host "Compressing files in $sourceDir to $zipPath"
-          $files = Get-ChildItem $sourceDir -File
-          if ($files.Count -gt 0) {
-              Compress-Archive -Path $files.FullName -DestinationPath $zipPath
-              # 删除原始文件，只保留 zip
-              $files | Remove-Item
-          } else {
-              Write-Warning "No files found to compress."
+          $pfx = Join-Path $env:GITHUB_WORKSPACE "src\Desktop\BiliCopilot.UI\BiliCopilot.UI_TemporaryKey.pfx"
+          msbuild $env:Project_Path `
+            /p:Configuration=$env:Configuration `
+            /p:Platform=$env:Platform `
+            /p:SolutionDir="$env:GITHUB_WORKSPACE\src\" `
+            /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:AppxBundle=Never `
+            /p:GenerateAppxPackageOnBuild=true `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile="$pfx" `
+            /p:PackageCertificatePassword="$env:Cert_Password" `
+            /p:AppxPackageDir="$env:GITHUB_WORKSPACE\AppPackages\"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
           }
 
-      - name: Upload Build Artifacts
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $appPackages = Join-Path $env:GITHUB_WORKSPACE "AppPackages"
+          $staging = Join-Path $env:GITHUB_WORKSPACE "Artifacts\staging"
+          $artifacts = Join-Path $env:GITHUB_WORKSPACE "Artifacts"
+
+          if (Test-Path $staging) {
+            Remove-Item $staging -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
+
+          $packages = @()
+          $packages += Get-ChildItem -Path $appPackages -Recurse -File -Filter *.msix -ErrorAction SilentlyContinue
+          $packages += Get-ChildItem -Path $appPackages -Recurse -File -Filter *.cer -ErrorAction SilentlyContinue
+          foreach ($package in $packages) {
+            Copy-Item $package.FullName -Destination $staging -Force
+          }
+
+          $cer = Join-Path $env:GITHUB_WORKSPACE "src\Desktop\BiliCopilot.UI\BiliCopilot.UI_TemporaryKey.cer"
+          if (Test-Path $cer) {
+            Copy-Item $cer -Destination $staging -Force
+          }
+
+          Copy-Item "docs/sideload-guide.txt" -Destination (Join-Path $staging "安装说明.txt") -Force
+          Copy-Item "scripts/Install.ps1" -Destination (Join-Path $staging "Install.ps1") -Force
+
+          $zip = Join-Path $artifacts "BiliCopilot_${{ inputs.version }}_$env:Platform.zip"
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zip -Force
+          Get-ChildItem $staging | Select-Object Name, Length
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BiliCopilot.UI-Sideload-${{ inputs.version }}-${{ env.Platform }}-${{ env.Configuration }}
-          path: ${{ github.workspace }}\FinalPackages\*
-
-  publish-github:
-    needs: [build, generate-notes]
-    runs-on: self-hosted
-    if: github.actor == 'Richasy'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Sideload Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: BiliCopilot.UI-Sideload-*
-          path: ${{ github.workspace }}/FinalPackages/Sideload
-          merge-multiple: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ inputs.version }}
-          name: ${{ inputs.version }}
-          body: ${{ needs.generate-notes.outputs.notes_zh }}
-          files: ${{ github.workspace }}/FinalPackages/Sideload/*
-          draft: ${{ needs.generate-notes.outputs.success != 'true' }}
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  notify:
-    needs:
-      - build
-      - publish-github
-    runs-on: self-hosted
-    if: always() && github.actor == 'Richasy'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Notify Telegram
-        uses: ./.github/actions/notify-telegram
-        with:
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          status: ${{ (needs.build.result == 'cancelled') && 'cancelled' || (needs.build.result == 'failure' || needs.publish-github.result == 'failure') && 'failure' || 'success' }}
-          version: ${{ inputs.version }}
-          platform: "x64, arm64"
-          build-type: "Sideload (Pre-release)"
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: BiliCopilot-Sideload-${{ inputs.version }}-${{ matrix.platform }}
+          path: Artifacts/*.zip
+          if-no-files-found: error

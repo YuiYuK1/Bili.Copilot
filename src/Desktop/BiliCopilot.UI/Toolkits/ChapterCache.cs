@@ -3,7 +3,6 @@
 using BiliCopilot.UI.Models.Constants;
 using Microsoft.Windows.Storage;
 using Richasy.BiliKernel.Models.Media;
-using System.Text;
 using System.Text.Json;
 
 namespace BiliCopilot.UI.Toolkits;

@@ -71,11 +71,6 @@
                 Background="#E61A1A1A"
                 CornerRadius="0,8,8,0">
                 <StackPanel MinWidth="40">
-                    <TextBlock
-                        HorizontalAlignment="Right"
-                        FontSize="10"
-                        Foreground="#99FFFFFF"
-                        Text="{ext:Locale Name=TempSpeedSmart}" />
                     <StackPanel
                         x:Name="SpeedOptions"
                         HorizontalAlignment="Right"

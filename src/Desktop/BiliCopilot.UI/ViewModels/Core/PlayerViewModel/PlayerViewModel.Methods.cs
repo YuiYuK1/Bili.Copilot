@@ -806,8 +806,7 @@ public sealed partial class PlayerViewModel
         {
             if (_isRightKeyTripleSpeed)
             {
-                // 列表按 1.5x / 2x / 3x 从上到下排列，按需求上方向键选择下一项.
-                NextTempSpeedCommand.Execute(default);
+                PreviousTempSpeedCommand.Execute(default);
             }
             else if (AppToolkit.IsOnlyCtrlPressed())
             {
@@ -822,7 +821,8 @@ public sealed partial class PlayerViewModel
         {
             if (_isRightKeyTripleSpeed)
             {
-                PreviousTempSpeedCommand.Execute(default);
+                // 向下切换下一项；到 3x 后继续向下回到 1.5x.
+                NextTempSpeedCommand.Execute(default);
             }
             else if (AppToolkit.IsOnlyCtrlPressed())
             {

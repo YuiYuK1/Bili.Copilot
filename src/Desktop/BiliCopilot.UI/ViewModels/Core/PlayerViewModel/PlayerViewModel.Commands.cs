@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Controls.Danmaku;
 using BiliCopilot.UI.Models.Constants;
@@ -305,8 +305,20 @@ public sealed partial class PlayerViewModel
             return;
         }
 
-        var index = Math.Clamp(TempSpeedIndex + delta, 0, TempSpeedOptions.Count - 1);
-        if (index == TempSpeedIndex)
+        var count = TempSpeedOptions.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        var current = Math.Clamp(TempSpeedIndex, 0, count - 1);
+        var index = (current + delta) % count;
+        if (index < 0)
+        {
+            index += count;
+        }
+
+        if (index == current)
         {
             return;
         }

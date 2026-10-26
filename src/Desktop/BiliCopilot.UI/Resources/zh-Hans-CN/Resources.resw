@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -2903,9 +2903,6 @@
   </data>
   <data name="TempSpeedPlaying" xml:space="preserve">
     <value>倍速播放中</value>
-  </data>
-  <data name="TempSpeedSmart" xml:space="preserve">
-    <value>智能</value>
   </data>
   <data name="TopWindow" xml:space="preserve">
     <value>置顶窗口</value>

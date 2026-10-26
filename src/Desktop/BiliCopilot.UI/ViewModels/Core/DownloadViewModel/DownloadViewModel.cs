@@ -177,7 +177,9 @@ public sealed partial class DownloadViewModel : ViewModelBase
         var withoutCredential = SettingsToolkit.ReadLocalSetting(SettingNames.WithoutCredentialWhenGenDownloadCommand, false);
         if (!UseExternal())
         {
-            cmd += $" -app --ffmpeg-path \"{_ffmpegPath}\"";
+            // 不使用 -app：BBDownT 的 APP 接口只认 access_token，实测带真实 token 仍被当作游客解析（最高 480P），
+            // 统一走 WEB 接口，让 --cookie 决定可用画质
+            cmd += $" --ffmpeg-path \"{_ffmpegPath}\"";
         }
 
         if (!(UseExternal() && withoutCredential))

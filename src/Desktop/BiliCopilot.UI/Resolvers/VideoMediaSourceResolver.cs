@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Extensions;
 using BiliCopilot.UI.Models;
@@ -146,17 +146,54 @@ internal sealed partial class VideoMediaSourceResolver(IPlayerService playerServ
             return [];
         }
 
+        var video = _snapshot.Video.Identifier;
+        var cid = Convert.ToInt64(_part.Identifier.Id);
+        var cacheKey = ChapterCache.BuildKey(video.Id, _part.Identifier.Id);
+        var cached = await ChapterCache.LoadAsync(cacheKey);
+        if (cached.Count > 0)
+        {
+            // 缓存视频可能离线播放，先用本地章节文件；同时后台刷新一次.
+            _ = RefreshChaptersAsync(cacheKey, video, cid);
+            return cached;
+        }
+
+        return await FetchChaptersAsync(cacheKey, video, cid);
+    }
+
+    private async Task<List<VideoChapter>> FetchChaptersAsync(string cacheKey, MediaIdentifier video, long cid)
+    {
         try
         {
-            var chapters = await playerService.GetVideoChaptersAsync(
-                _snapshot.Video.Identifier,
-                Convert.ToInt64(_part.Identifier.Id));
-            return chapters is null ? [] : [.. chapters];
+            var chapters = await playerService.GetVideoChaptersAsync(video, cid);
+            List<VideoChapter> result = chapters is null ? [] : [.. chapters];
+            if (result.Count > 0 && !await ChapterCache.SaveAsync(cacheKey, result))
+            {
+                logger.LogWarning("保存章节缓存失败.");
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "获取章节信息失败，将不展示分段进度.");
-            return [];
+            logger.LogWarning(ex, "获取章节信息失败，将尝试本地缓存.");
+            return await ChapterCache.LoadAsync(cacheKey);
+        }
+    }
+
+    private async Task RefreshChaptersAsync(string cacheKey, MediaIdentifier video, long cid)
+    {
+        try
+        {
+            var chapters = await playerService.GetVideoChaptersAsync(video, cid);
+            List<VideoChapter> result = chapters is null ? [] : [.. chapters];
+            if (result.Count > 0 && !await ChapterCache.SaveAsync(cacheKey, result))
+            {
+                logger.LogWarning("刷新章节缓存失败.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "刷新章节缓存失败.");
         }
     }
 

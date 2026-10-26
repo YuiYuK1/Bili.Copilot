@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Forms;
 using BiliCopilot.UI.Models;
@@ -864,12 +864,28 @@ public sealed partial class PlayerViewModel
 
         if (_sourceResolver is not VideoMediaSourceResolver videoResolver)
         {
+            // 本地/缓存播放不走在线章节接口时，仍尝试读取按视频与分P保存的章节文件.
+            if (_snapshot?.Video is null
+                || Connector is not VideoConnectorViewModel videoConnector
+                || videoConnector._part is null)
+            {
+                return;
+            }
+
+            var cacheKey = ChapterCache.BuildKey(_snapshot.Video.Identifier.Id, videoConnector._part.Identifier.Id);
+            var cachedChapters = await ChapterCache.LoadAsync(cacheKey);
+            FillChapters(cachedChapters);
             return;
         }
 
         // 章节数据来自 B 站播放接口的 view_points 字段，
         // 而不是 mpv 的 chapter-list（B 站的 DASH 流不含内嵌章节，该属性恒为空）.
         var chapters = await videoResolver.GetChaptersAsync();
+        FillChapters(chapters);
+    }
+
+    private void FillChapters(IReadOnlyList<VideoChapter> chapters)
+    {
         _isChapterInitialized = true;
         if (chapters.Count == 0)
         {

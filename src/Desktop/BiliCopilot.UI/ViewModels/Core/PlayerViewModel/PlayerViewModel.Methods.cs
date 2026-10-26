@@ -214,6 +214,10 @@ public sealed partial class PlayerViewModel
                 await Client.SetAudioExclusiveAsync(audioExclusive);
             }
 
+            // 蓝牙耳机在暂停后可能让音频设备进入省电状态，恢复播放时要等几秒才有声音。
+            // 让 mpv 在暂停时继续输出静音，保持音频输出设备处于活动状态.
+            MpvNative.SetPropertyString(Client.Handle, "options/audio-stream-silence", "yes");
+
             var logLevel = SettingsToolkit.ReadLocalSetting(SettingNames.MpvLogLevel, MpvLogLevel.Warn);
             await Client.SetLogLevelAsync(logLevel);
             await Client.UseIdleAsync(true);

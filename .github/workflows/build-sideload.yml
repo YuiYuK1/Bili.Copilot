@@ -64,7 +64,19 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password -Force | Out-Null
           Export-Certificate -Cert $cert -FilePath $cer -Force | Out-Null
 
-      - name: Build and package
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild $env:Project_Path `
+            /p:Configuration=$env:Configuration `
+            /p:Platform=$env:Platform `
+            /p:SolutionDir="$env:GITHUB_WORKSPACE\src\" `
+            /p:GenerateAppxPackageOnBuild=false
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Package
         shell: pwsh
         run: |
           $pfx = Join-Path $env:GITHUB_WORKSPACE "src\Desktop\BiliCopilot.UI\BiliCopilot.UI_TemporaryKey.pfx"
@@ -75,6 +87,7 @@ jobs:
             /p:UapAppxPackageBuildMode=SideloadOnly `
             /p:AppxBundle=Never `
             /p:GenerateAppxPackageOnBuild=true `
+            /p:BuildProjectReferences=false `
             /p:AppxPackageSigningEnabled=true `
             /p:PackageCertificateKeyFile="$pfx" `
             /p:PackageCertificatePassword="$env:Cert_Password" `

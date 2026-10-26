@@ -136,3 +136,31 @@ jobs:
           name: BiliCopilot-Sideload-${{ inputs.version }}-${{ matrix.platform }}
           path: Artifacts/*.zip
           if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: BiliCopilot-Sideload-${{ inputs.version }}-*
+          path: release
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: ${{ inputs.version }}
+          generate_release_notes: true
+          prerelease: true
+          files: release/*.zip
+          fail_on_unmatched_files: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

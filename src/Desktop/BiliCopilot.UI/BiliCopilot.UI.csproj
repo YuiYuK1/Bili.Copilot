@@ -96,7 +96,7 @@
     <None Remove="Controls\Components\UserCardControl.xaml" />
     <None Remove="Controls\Components\VideoMomentPresenter.xaml" />
     <None Remove="Controls\Core\CacheBar.xaml" />
-    <None Remove="Controls\Core\ChapterPanel.xaml" />
+    <None Remove="Controls\Core\SpeedPlayOverlay.xaml" />
     <None Remove="Controls\Core\NextTip.xaml" />
     <None Remove="Controls\Core\OverlayTransportControls.xaml" />
     <None Remove="Controls\Core\PlayerInteractivePanel.xaml" />
@@ -1230,7 +1230,7 @@
     <Page Update="Controls\Core\NextTip.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Update="Controls\Core\ChapterPanel.xaml">
+    <Page Update="Controls\Core\SpeedPlayOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Update="Controls\Core\CacheBar.xaml">

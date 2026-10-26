@@ -804,7 +804,12 @@ public sealed partial class PlayerViewModel
         }
         else if (args.VirtualKey == Windows.System.VirtualKey.Up)
         {
-            if (AppToolkit.IsOnlyCtrlPressed())
+            if (_isRightKeyTripleSpeed)
+            {
+                // 列表按 1.5x / 2x / 3x 从上到下排列，按需求上方向键选择下一项.
+                NextTempSpeedCommand.Execute(default);
+            }
+            else if (AppToolkit.IsOnlyCtrlPressed())
             {
                 IncreaseSpeedCommand.Execute(default);
             }
@@ -815,7 +820,11 @@ public sealed partial class PlayerViewModel
         }
         else if (args.VirtualKey == Windows.System.VirtualKey.Down)
         {
-            if (AppToolkit.IsOnlyCtrlPressed())
+            if (_isRightKeyTripleSpeed)
+            {
+                PreviousTempSpeedCommand.Execute(default);
+            }
+            else if (AppToolkit.IsOnlyCtrlPressed())
             {
                 DecreaseSpeedCommand.Execute(default);
             }

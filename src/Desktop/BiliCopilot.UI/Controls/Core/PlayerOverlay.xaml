@@ -257,7 +257,7 @@
                 CornerRadius="20"
                 Orientation="Horizontal"
                 Spacing="12"
-                Visibility="{x:Bind ViewModel.IsSpeedChanging, Mode=OneWay}">
+                Visibility="{x:Bind ViewModel.IsNormalSpeedChanging, Mode=OneWay}">
                 <TextBlock VerticalAlignment="Center" Text="{ext:Locale Name=PlaySpeed}" />
                 <TextBlock
                     VerticalAlignment="Center"
@@ -284,6 +284,12 @@
                         Duration="0:0:0.25" />
                 </animations:Implicit.HideAnimations>
             </StackPanel>
+
+            <local:SpeedPlayOverlay
+                Grid.Row="1"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
 
             <Grid
                 Grid.Row="1"

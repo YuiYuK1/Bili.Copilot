@@ -2901,6 +2901,12 @@
   <data name="PlaySpeed" xml:space="preserve">
     <value>播放速度</value>
   </data>
+  <data name="TempSpeedPlaying" xml:space="preserve">
+    <value>倍速播放中</value>
+  </data>
+  <data name="TempSpeedSmart" xml:space="preserve">
+    <value>智能</value>
+  </data>
   <data name="TopWindow" xml:space="preserve">
     <value>置顶窗口</value>
   </data>

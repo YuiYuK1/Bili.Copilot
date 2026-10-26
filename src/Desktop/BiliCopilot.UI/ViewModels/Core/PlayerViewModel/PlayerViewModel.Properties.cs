@@ -132,6 +132,28 @@ public sealed partial class PlayerViewModel
     [ObservableProperty]
     public partial bool IsHoldingSpeedChanging { get; set; }
 
+    /// <summary>
+    /// 长按倍速播放时可选择的速度，按界面从上到下排列.
+    /// </summary>
+    public IReadOnlyList<double> TempSpeedOptions { get; } = new[] { 1.5d, 2d, 3d };
+
+    /// <summary>
+    /// 当前选中的长按倍速下标.
+    /// </summary>
+    [ObservableProperty]
+    public partial int TempSpeedIndex { get; set; }
+
+    /// <summary>
+    /// 是否正在显示普通的播放速度提示（长按倍速时由专用浮层接管）.
+    /// </summary>
+    public bool IsNormalSpeedChanging => IsSpeedChanging && !IsHoldingSpeedChanging;
+
+    partial void OnIsSpeedChangingChanged(bool value)
+        => OnPropertyChanged(nameof(IsNormalSpeedChanging));
+
+    partial void OnIsHoldingSpeedChangingChanged(bool value)
+        => OnPropertyChanged(nameof(IsNormalSpeedChanging));
+
     [ObservableProperty]
     public partial bool IsConnecting { get; set; }
 

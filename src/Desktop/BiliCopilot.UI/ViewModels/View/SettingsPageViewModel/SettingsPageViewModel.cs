@@ -80,7 +80,7 @@ public sealed partial class SettingsPageViewModel : AISettingsViewModelBase
         var cacheDir = SettingsToolkit.ReadLocalSetting(SettingNames.CacheDir, string.Empty);
         HasCustomCacheDir = !string.IsNullOrEmpty(cacheDir);
         CacheDirDescription = string.IsNullOrEmpty(cacheDir) ? "--demuxer-cache-dir" : cacheDir;
-        TempPlaybackRate = SettingsToolkit.ReadLocalSetting(SettingNames.TempPlaybackRate, 3.0);
+        TempPlaybackRate = SettingsToolkit.ReadLocalSetting(SettingNames.TempPlaybackRate, 1.5);
         try
         {
             PreferDecode = SettingsToolkit.ReadLocalSetting(SettingNames.PreferDecode, PreferDecodeType.Auto);

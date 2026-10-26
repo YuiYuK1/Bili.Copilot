@@ -275,17 +275,75 @@ public sealed partial class PlayerViewModel
     [RelayCommand]
     private async Task TripleSpeedAsync()
     {
-        if (Player is null || !Player.IsPlaying)
+        if (Player is null || !Player.IsPlaying || IsHoldingSpeedChanging)
         {
             return;
         }
 
         _lastSpeed = Player.PlaybackRate;
+        var preferredSpeed = SettingsToolkit.ReadLocalSetting(SettingNames.TempPlaybackRate, TempSpeedOptions[0]);
+        TempSpeedIndex = FindNearestTempSpeedIndex(preferredSpeed);
         IsHoldingSpeedChanging = true;
-        await Client!.SetSpeedAsync(SettingsToolkit.ReadLocalSetting(Models.Constants.SettingNames.TempPlaybackRate, 3d));
+        await ApplyTempSpeedAsync();
         LastSpeedChangingTime = DateTimeOffset.Now;
         IsSpeedChanging = true;
         _tripleTimer!.Start();
+    }
+
+    [RelayCommand]
+    private Task NextTempSpeedAsync()
+        => StepTempSpeedAsync(1);
+
+    [RelayCommand]
+    private Task PreviousTempSpeedAsync()
+        => StepTempSpeedAsync(-1);
+
+    private async Task StepTempSpeedAsync(int delta)
+    {
+        if (!IsHoldingSpeedChanging || Player is null)
+        {
+            return;
+        }
+
+        var index = Math.Clamp(TempSpeedIndex + delta, 0, TempSpeedOptions.Count - 1);
+        if (index == TempSpeedIndex)
+        {
+            return;
+        }
+
+        TempSpeedIndex = index;
+        await ApplyTempSpeedAsync();
+        LastSpeedChangingTime = DateTimeOffset.Now;
+        IsSpeedChanging = true;
+    }
+
+    private async Task ApplyTempSpeedAsync()
+    {
+        var index = Math.Clamp(TempSpeedIndex, 0, TempSpeedOptions.Count - 1);
+        TempSpeedIndex = index;
+        var speed = TempSpeedOptions[index];
+        SettingsToolkit.WriteLocalSetting(SettingNames.TempPlaybackRate, speed);
+        if (Client is not null)
+        {
+            await Client.SetSpeedAsync(speed);
+        }
+    }
+
+    private int FindNearestTempSpeedIndex(double speed)
+    {
+        var index = 0;
+        var distance = double.MaxValue;
+        for (var i = 0; i < TempSpeedOptions.Count; i++)
+        {
+            var currentDistance = Math.Abs(TempSpeedOptions[i] - speed);
+            if (currentDistance < distance)
+            {
+                distance = currentDistance;
+                index = i;
+            }
+        }
+
+        return index;
     }
 
     [RelayCommand]

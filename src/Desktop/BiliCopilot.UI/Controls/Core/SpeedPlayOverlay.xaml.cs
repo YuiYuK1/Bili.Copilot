@@ -2,7 +2,6 @@
 
 using BiliCopilot.UI.ViewModels.Core;
 using Microsoft.UI.Text;
-using Microsoft.UI.Xaml.Media;
 using System.ComponentModel;
 
 namespace BiliCopilot.UI.Controls.Core;
@@ -12,8 +11,8 @@ namespace BiliCopilot.UI.Controls.Core;
 /// </summary>
 public sealed partial class SpeedPlayOverlay : PlayerControlBase
 {
-    private static readonly Brush SelectedBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
-    private static readonly Brush UnselectedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
+    private static readonly Microsoft.UI.Xaml.Media.Brush SelectedBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+    private static readonly Microsoft.UI.Xaml.Media.Brush UnselectedBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SpeedPlayOverlay"/> class.

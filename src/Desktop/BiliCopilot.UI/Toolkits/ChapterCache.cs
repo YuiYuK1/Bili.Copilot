@@ -3,7 +3,6 @@
 using BiliCopilot.UI.Models.Constants;
 using Microsoft.Windows.Storage;
 using Richasy.BiliKernel.Models.Media;
-using System.Text.Json;
 
 namespace BiliCopilot.UI.Toolkits;
 
@@ -13,7 +12,7 @@ namespace BiliCopilot.UI.Toolkits;
 internal static class ChapterCache
 {
     private const string FolderName = "Chapters";
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly System.Text.Json.JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
@@ -52,7 +51,7 @@ internal static class ChapterCache
                 StartTime = c.StartTime,
                 EndTime = c.EndTime,
             }).ToList();
-            var json = JsonSerializer.Serialize(payload, SerializerOptions);
+            var json = System.Text.Json.JsonSerializer.Serialize(payload, SerializerOptions);
             var path = GetFilePath(key);
             var tempPath = $"{path}.tmp";
             await File.WriteAllTextAsync(tempPath, json, Encoding.UTF8);
@@ -81,7 +80,7 @@ internal static class ChapterCache
             }
 
             var json = await File.ReadAllTextAsync(path, Encoding.UTF8);
-            var payload = JsonSerializer.Deserialize<List<ChapterCacheEntry>>(json, SerializerOptions);
+            var payload = System.Text.Json.JsonSerializer.Deserialize<List<ChapterCacheEntry>>(json, SerializerOptions);
             if (payload is null)
             {
                 return [];

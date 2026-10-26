@@ -60,6 +60,24 @@ public sealed partial class CommentItemViewModel : ViewModelBase<CommentInformat
     private void MarkReplyTarget()
         => _markReplyTargetAction?.Invoke(this);
 
+    /// <summary>
+    /// 跳转到评论中提到的时间点.
+    /// </summary>
+    /// <param name="seconds">目标秒数.</param>
+    /// <returns><see cref="Task"/>.</returns>
+    [RelayCommand]
+    private async Task SeekToTimestampAsync(double seconds)
+    {
+        var players = this.Get<AppViewModel>().Players;
+        var player = players.LastOrDefault();
+        if (player is null || seconds <= 0)
+        {
+            return;
+        }
+
+        await player.ChangePositionAsync(seconds);
+    }
+
     [RelayCommand]
     private void ShowUserSpace()
         => this.Get<NavigationViewModel>().NavigateToOver(typeof(UserSpacePage), Data.User.User);

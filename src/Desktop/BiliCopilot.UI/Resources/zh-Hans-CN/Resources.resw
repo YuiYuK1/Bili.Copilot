@@ -2817,6 +2817,9 @@
   <data name="ChapterIndexTemplate" xml:space="preserve">
     <value>章节 {0}</value>
   </data>
+  <data name="ChapterList" xml:space="preserve">
+    <value>章节列表</value>
+  </data>
   <data name="BackwardTemplate" xml:space="preserve">
     <value>后退{0}秒</value>
   </data>

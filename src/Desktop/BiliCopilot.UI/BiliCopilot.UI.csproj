@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows10.0.22621.0</TargetFramework>
@@ -336,16 +336,16 @@
 	<PackageReference Include="Richasy.AgentKernel.Connectors.XAI" />
 	<PackageReference Include="Richasy.AgentKernel.Connectors.Youdao" />
 	<PackageReference Include="Richasy.AgentKernel.Connectors.ZhiPu" />
-    <PackageReference Include="Richasy.BiliKernel.Authorizers.TV" />
-    <PackageReference Include="Richasy.BiliKernel.Resolvers.WinUICookies" />
-    <PackageReference Include="Richasy.BiliKernel.Resolvers.WinUIQRCode" />
-    <PackageReference Include="Richasy.BiliKernel.Resolvers.WinUIToken" />
-    <PackageReference Include="Richasy.BiliKernel.Services.Article" />
-    <PackageReference Include="Richasy.BiliKernel.Services.Comment" />
-    <PackageReference Include="Richasy.BiliKernel.Services.Media" />
-    <PackageReference Include="Richasy.BiliKernel.Services.Moment" />
-    <PackageReference Include="Richasy.BiliKernel.Services.Search" />
-    <PackageReference Include="Richasy.BiliKernel.Services.User" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Authorizers\Authorizers.Tv\Authorizers.Tv.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Resolvers\Resolvers.WinUICookies\Resolvers.WinUICookies.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Resolvers\Resolvers.WinUIQRCode\Resolvers.WinUIQRCode.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Resolvers\Resolvers.WinUIToken\Resolvers.WinUIToken.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.Article\Services.Article.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.Comment\Services.Comment.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.Media\Services.Media.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.Moment\Services.Moment.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.Search\Services.Search.csproj" />
+    <ProjectReference Include="..\..\..\externals\bili-kernel\src\Services\Services.User\Services.User.csproj" />
     <PackageReference Include="Richasy.MpvKernel" />
     <PackageReference Include="Richasy.MpvKernel.Core" />
     <PackageReference Include="Richasy.MpvKernel.Player" />

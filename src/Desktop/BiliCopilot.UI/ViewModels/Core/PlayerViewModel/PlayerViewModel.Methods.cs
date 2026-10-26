@@ -699,8 +699,8 @@ public sealed partial class PlayerViewModel
 
     private void OnWindowKeyDown(InputKeyboardSource sender, KeyEventArgs args)
     {
-        // 控制栏显示时仍允许长按右方向键进入临时倍速，只有弹出层需要拦截键盘.
-        if (IsPopupVisible || IsExtraPanelVisible)
+        // 控制栏显示时仍允许长按右方向键进入临时倍速；弹出层、信息侧栏和统计信息覆盖层需要拦截键盘.
+        if (IsPopupVisible || IsExtraPanelVisible || IsStatsOverlayShown)
         {
             return;
         }

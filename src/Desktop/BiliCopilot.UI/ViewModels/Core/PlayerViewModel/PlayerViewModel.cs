@@ -26,9 +26,16 @@ public sealed partial class PlayerViewModel(DispatcherQueue queue, ILogger<Playe
     public async ValueTask DisposeAsync()
     {
         Danmaku.ClearAll();
+        if (_sponsorBlockLoadSource is not null)
+        {
+            await _sponsorBlockLoadSource.CancelAsync();
+            _sponsorBlockLoadSource.Dispose();
+            _sponsorBlockLoadSource = null;
+        }
+
+        ResetSponsorBlock();
         _nativeMp?.Dispose();
         _nativeMp = null;
-        DisposeSponsorBlock();
 
         if (_rightKeyLongPressTimer != null)
         {
@@ -96,6 +103,7 @@ public sealed partial class PlayerViewModel(DispatcherQueue queue, ILogger<Playe
         IsEnd = false;
         _isTlsFailed = false;
         _prevPosition = 0;
+        ResetSponsorBlock();
         IsSubtitleEmpty = true;
         _isDanmakuInitialized = false;
         _isChapterInitialized = false;
@@ -237,7 +245,7 @@ public sealed partial class PlayerViewModel(DispatcherQueue queue, ILogger<Playe
         ProgressChanged?.Invoke(this, 0);
         await LoadSourcesAsync();
         await LoadSubtitlesAsync();
-        await LoadSponsorSegmentsAsync();
+        StartSponsorBlockLoading();
         if (Window.IsClosed)
         {
             return;

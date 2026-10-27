@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<local:PlayerControlBase
+    x:Class="BiliCopilot.UI.Controls.Core.SponsorBlockSkipTip"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:ext="using:BiliCopilot.UI.Extensions"
+    xmlns:local="using:BiliCopilot.UI.Controls.Core"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <StackPanel
+        x:Name="RootPanel"
+        Width="320"
+        AllowFocusOnInteraction="False"
+        Background="{ThemeResource AcrylicInAppFillColorCustomBrush}"
+        CornerRadius="{StaticResource OverlayCornerRadius}"
+        IsTabStop="False"
+        Visibility="Collapsed">
+        <StackPanel Margin="16,12">
+            <TextBlock Text="{x:Bind ViewModel.SponsorBlockTipText, Mode=OneWay}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid Margin="20,0,20,8" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <HyperlinkButton
+                HorizontalAlignment="Stretch"
+                AllowFocusOnInteraction="False"
+                Command="{x:Bind ViewModel.AcceptSponsorBlockPromptCommand, Mode=OneWay}"
+                Content="{ext:Locale Name=SponsorBlockSkipButton}"
+                IsTabStop="False" />
+            <HyperlinkButton
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
+                AllowFocusOnInteraction="False"
+                Background="Transparent"
+                Command="{x:Bind ViewModel.DismissSponsorBlockPromptCommand, Mode=OneWay}"
+                Content="{ext:Locale Name=Cancel}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                IsTabStop="False" />
+        </Grid>
+        <ProgressBar
+            x:Name="ProgressRect"
+            Height="4"
+            HorizontalAlignment="Stretch"
+            Background="Transparent"
+            Maximum="8" />
+    </StackPanel>
+</local:PlayerControlBase>

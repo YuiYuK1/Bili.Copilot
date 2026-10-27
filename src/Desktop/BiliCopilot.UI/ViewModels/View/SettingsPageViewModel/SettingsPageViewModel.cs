@@ -75,6 +75,7 @@ public sealed partial class SettingsPageViewModel : AISettingsViewModelBase
         MaxCacheSeconds = SettingsToolkit.ReadLocalSetting(SettingNames.MaxCacheSeconds, 300d); // Default to 300 seconds
         IsSponsorBlockEnabled = SettingsToolkit.ReadLocalSetting(SettingNames.SponsorBlockEnabled, true);
         AutoSkipSponsor = SettingsToolkit.ReadLocalSetting(SettingNames.AutoSkipSponsor, true);
+        InitializeSponsorBlockSettings();
         HrSeek = SettingsToolkit.ReadLocalSetting(SettingNames.HrSeek, HrSeekType.Default);
         MaxVolume = SettingsToolkit.ReadLocalSetting(SettingNames.MaxVolume, 100d);
         AudioExclusiveEnabled = SettingsToolkit.ReadLocalSetting(SettingNames.AudioExclusiveEnabled, false);

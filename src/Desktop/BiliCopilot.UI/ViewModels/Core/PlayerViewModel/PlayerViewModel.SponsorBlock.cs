@@ -1,12 +1,12 @@
 // Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Models.Constants;
-using BiliCopilot.UI.Models.SponsorBlock;
-using BiliCopilot.UI.Services.Interfaces;
+using BiliCopilot.UI.SponsorBlock;
 using BiliCopilot.UI.Toolkits;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
-using Microsoft.UI.Dispatching;
+using Richasy.WinUIKernel.Share.Base;
 
 namespace BiliCopilot.UI.ViewModels.Core;
 
@@ -15,20 +15,40 @@ namespace BiliCopilot.UI.ViewModels.Core;
 /// </summary>
 public sealed partial class PlayerViewModel
 {
-    private const int SponsorCheckIntervalMs = 500;
-    private const int SponsorNoticeDurationMs = 2500;
-
-    private IReadOnlyList<SponsorSegment> _sponsorSegments = [];
-    private SponsorSegment? _currentSponsorSegment;
-    private bool _isSkippingSponsor;
-    private long _lastSponsorCheckTicks;
-    private DispatcherQueueTimer? _sponsorNoticeTimer;
-    private bool _isApplyingSponsorSettings;
+    private SponsorBlockController? _sponsorBlockController;
+    private IReadOnlyList<SponsorBlockSegment> _sponsorBlockSegments = Array.Empty<SponsorBlockSegment>();
+    private CancellationTokenSource? _sponsorBlockLoadSource;
+    private int _sponsorBlockGeneration;
+    private bool _isSponsorBlockSeeking;
+    private bool _isApplyingSponsorBlockSettings;
 
     /// <summary>
-    /// 当前视频的赞助片段.
+    /// 当前分 P 的空降助手片段列表，供进度条标记等界面复用.
     /// </summary>
-    public IReadOnlyList<SponsorSegment> SponsorSegments => _sponsorSegments;
+    public IReadOnlyList<SponsorBlockSegment> SponsorBlockSegments => _sponsorBlockSegments;
+
+    /// <summary>
+    /// 当前播放位置所在的空降助手片段.
+    /// </summary>
+    public SponsorBlockSegment? ActiveSponsorBlockSegment => SponsorBlockController.ActiveSegment;
+
+    private SponsorBlockController SponsorBlockController
+        => _sponsorBlockController ??= new SponsorBlockController(ResolveSponsorBlockBehavior);
+
+    /// <summary>
+    /// 当前分 P 的空降片段列表已更新.
+    /// </summary>
+    public event EventHandler? SponsorBlockSegmentsChanged;
+
+    /// <summary>
+    /// 请求显示空降助手跳过提示.
+    /// </summary>
+    public event EventHandler? RequestShowSponsorBlockTip;
+
+    /// <summary>
+    /// 请求隐藏空降助手跳过提示.
+    /// </summary>
+    public event EventHandler? RequestHideSponsorBlockTip;
 
     /// <summary>
     /// 是否启用空降助手.
@@ -37,174 +57,266 @@ public sealed partial class PlayerViewModel
     public partial bool IsSponsorBlockEnabled { get; set; }
 
     /// <summary>
-    /// 是否自动跳过赞助片段.
+    /// 是否自动跳过。关闭后 Skip 行为退化为显示跳过按钮.
     /// </summary>
     [ObservableProperty]
     public partial bool AutoSkipSponsor { get; set; }
 
     /// <summary>
-    /// 是否显示空降助手提示.
+    /// 空降助手跳过提示文本.
     /// </summary>
     [ObservableProperty]
-    public partial bool IsSponsorSkipNoticeVisible { get; set; }
+    public partial string? SponsorBlockTipText { get; set; }
 
-    /// <summary>
-    /// 空降助手提示文本.
-    /// </summary>
-    [ObservableProperty]
-    public partial string SponsorSkipNoticeText { get; set; }
-
-    private async Task LoadSponsorSegmentsAsync()
+    private SponsorBlockBehavior ResolveSponsorBlockBehavior(SponsorBlockCategory category)
     {
-        ApplySponsorSettings();
-        ClearSponsorState();
+        var behavior = SponsorBlockBehaviorSettings.Read(category);
+        if (!AutoSkipSponsor && behavior == SponsorBlockBehavior.Skip)
+        {
+            return SponsorBlockBehavior.ShowButton;
+        }
+
+        return behavior;
+    }
+
+    [RelayCommand]
+    private async Task AcceptSponsorBlockPromptAsync()
+    {
+        var decision = SponsorBlockController.AcceptActivePrompt(Player?.Duration ?? 0);
+        if (decision.IsActionable)
+        {
+            HideSponsorBlockTip();
+            await ApplySponsorBlockDecisionAsync(decision, _sponsorBlockGeneration);
+        }
+    }
+
+    [RelayCommand]
+    private void DismissSponsorBlockPrompt()
+    {
+        var decision = SponsorBlockController.DismissActivePrompt();
+        if (decision.Kind == SponsorBlockActionKind.HideButton)
+        {
+            HideSponsorBlockTip();
+        }
+    }
+
+    private void ResetSponsorBlock()
+    {
+        _sponsorBlockGeneration++;
+        var previousSource = _sponsorBlockLoadSource;
+        _sponsorBlockLoadSource = null;
+        if (previousSource is not null)
+        {
+            previousSource.Cancel();
+            previousSource.Dispose();
+        }
+
+        _sponsorBlockSegments = Array.Empty<SponsorBlockSegment>();
+        NotifySponsorBlockSegmentsChanged();
+        var resetDecision = SponsorBlockController.Reset();
+        HideSponsorBlockTip();
+        _isSponsorBlockSeeking = false;
+
+        if (resetDecision is { Kind: SponsorBlockActionKind.RestoreMute, MuteState: bool restoreState })
+        {
+            _ = ApplySponsorBlockMuteAsync(restoreState);
+        }
+    }
+
+    private void StartSponsorBlockLoading()
+    {
+        ResetSponsorBlock();
+        ApplySponsorBlockSettings();
+
+        if (!IsSponsorBlockEnabled || Connector is not VideoConnectorViewModel videoConnector)
+        {
+            return;
+        }
+
+        var bvid = videoConnector.BvId;
+        var cid = videoConnector._part?.Identifier.Id;
+        if (string.IsNullOrWhiteSpace(bvid) || string.IsNullOrWhiteSpace(cid))
+        {
+            return;
+        }
+
+        var generation = _sponsorBlockGeneration;
+        var source = new CancellationTokenSource();
+        _sponsorBlockLoadSource = source;
+        _ = LoadSponsorBlockSegmentsAsync(bvid, cid, generation, source.Token);
+    }
+
+    private void CheckSponsorBlock(double position)
+    {
+        SyncSponsorBlockSettings();
+
+        if (_sponsorBlockSegments.Count == 0
+            || _isSponsorBlockSeeking
+            || IsProgressChanging
+            || Player?.IsPlaybackInitialized != true)
+        {
+            return;
+        }
 
         if (!IsSponsorBlockEnabled)
         {
+            if (SponsorBlockController.IsMuteApplied || SponsorBlockController.IsPromptActive)
+            {
+                var resetDecision = SponsorBlockController.Reset();
+                HideSponsorBlockTip();
+                if (resetDecision is { Kind: SponsorBlockActionKind.RestoreMute, MuteState: bool restoreState })
+                {
+                    _ = ApplySponsorBlockMuteAsync(restoreState);
+                }
+            }
+
             return;
         }
 
-        if (Connector is not VideoConnectorViewModel videoConnector
-            || string.IsNullOrEmpty(videoConnector.BvId))
+        var decision = SponsorBlockController.Evaluate(
+            _sponsorBlockSegments,
+            position,
+            Player.Duration,
+            IsMute,
+            DateTimeOffset.UtcNow);
+
+        if (decision.IsActionable)
         {
-            return;
+            _ = ApplySponsorBlockDecisionAsync(decision, _sponsorBlockGeneration);
         }
+    }
 
+    private async Task LoadSponsorBlockSegmentsAsync(string bvid, string cid, int generation, CancellationToken cancellationToken)
+    {
         try
         {
-            var service = this.Get<ISponsorBlockService>();
-            var segments = await service.GetSegmentsAsync(videoConnector.BvId!);
-            if (!IsSponsorBlockEnabled)
+            var segments = await this.Get<SponsorBlockService>().GetSegmentsAsync(bvid, cid, cancellationToken);
+            if (generation != _sponsorBlockGeneration)
             {
                 return;
             }
 
-            _sponsorSegments = segments;
-            OnPropertyChanged(nameof(SponsorSegments));
+            _sponsorBlockSegments = segments;
+            NotifySponsorBlockSegmentsChanged();
+            logger.LogDebug("空降助手已加载 {Count} 个片段", segments.Count);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "加载空降助手片段失败：{VideoId}", videoConnector.BvId);
+            logger.LogDebug(ex, "加载空降助手片段失败");
         }
     }
 
-    /// <summary>
-    /// 检查当前位置是否需要跳过。检查频率限制在每秒两次，避免跟随 Position 的高频事件做无谓计算.
-    /// </summary>
-    private async Task CheckAndSkipSponsorAsync(double position)
+    private async Task ApplySponsorBlockDecisionAsync(SponsorBlockDecision decision, int generation)
     {
-        SyncSponsorSettingsFromStorage();
-
-        if (!IsSponsorBlockEnabled || _sponsorSegments.Count == 0 || _isSkippingSponsor)
+        if (generation != _sponsorBlockGeneration)
         {
             return;
         }
 
-        var now = Environment.TickCount64;
-        if (now - _lastSponsorCheckTicks < SponsorCheckIntervalMs)
+        switch (decision.Kind)
+        {
+            case SponsorBlockActionKind.Skip when decision.Segment is not null:
+                await SkipSponsorSegmentAsync(decision.Segment, decision.TargetPosition, generation);
+                break;
+            case SponsorBlockActionKind.Mute
+                when decision.MuteState is bool muteState && SponsorBlockController.IsMuteApplied:
+                await ApplySponsorBlockMuteAsync(muteState);
+                break;
+            case SponsorBlockActionKind.RestoreMute:
+                if (decision.MuteState is bool restoreState)
+                {
+                    await ApplySponsorBlockMuteAsync(restoreState);
+                }
+
+                break;
+            case SponsorBlockActionKind.ShowButton when decision.Segment is not null:
+                SponsorBlockTipText = string.Format(
+                    ResourceToolkit.GetLocalizedString(StringNames.SponsorBlockPromptTemplate),
+                    SponsorBlockCategoryHelper.GetDisplayName(decision.Segment.Category));
+                RequestShowSponsorBlockTip?.Invoke(this, EventArgs.Empty);
+                break;
+            case SponsorBlockActionKind.HideButton:
+                HideSponsorBlockTip();
+                break;
+        }
+    }
+
+    private async Task ApplySponsorBlockMuteAsync(bool isMuted)
+    {
+        if (Client is null)
         {
             return;
         }
 
-        _lastSponsorCheckTicks = now;
-
-        var segment = FindCurrentSponsorSegment(position);
-        if (segment is null)
-        {
-            if (_currentSponsorSegment is not null && position >= _currentSponsorSegment.EndTime)
-            {
-                _currentSponsorSegment = null;
-            }
-
-            return;
-        }
-
-        if (ReferenceEquals(segment, _currentSponsorSegment))
-        {
-            return;
-        }
-
-        _currentSponsorSegment = segment;
-        var categoryName = GetSponsorCategoryName(segment.Category);
-
-        if (!AutoSkipSponsor)
-        {
-            ShowSponsorSkipNotice(string.Format(ResourceToolkit.GetLocalizedString(StringNames.SponsorDetected), categoryName));
-            return;
-        }
-
-        var duration = Player.Duration;
-        var target = Math.Min(segment.EndTime, Math.Max(duration - 0.1, position));
-        if (duration <= 0 || target - position < 2)
-        {
-            // 片段太短，播放器会忽略过近的跳转，不做无效 seek.
-            ShowSponsorSkipNotice(string.Format(ResourceToolkit.GetLocalizedString(StringNames.SponsorDetected), categoryName));
-            return;
-        }
-
-        _isSkippingSponsor = true;
         try
         {
-            await ChangePositionAsync(target);
-            ShowSponsorSkipNotice(string.Format(ResourceToolkit.GetLocalizedString(StringNames.SponsorSkipped), categoryName));
+            IsMute = isMuted;
+            await Client.SetMuteAsync(isMuted);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "空降助手跳转失败");
-        }
-        finally
-        {
-            _isSkippingSponsor = false;
+            logger.LogDebug(ex, "空降助手静音状态切换失败");
         }
     }
 
-    private SponsorSegment? FindCurrentSponsorSegment(double position)
+    private void HideSponsorBlockTip()
     {
-        var left = 0;
-        var right = _sponsorSegments.Count - 1;
-        while (left <= right)
-        {
-            var mid = left + ((right - left) / 2);
-            var segment = _sponsorSegments[mid];
-            if (position < segment.StartTime - 0.5)
-            {
-                right = mid - 1;
-            }
-            else if (position >= segment.EndTime)
-            {
-                left = mid + 1;
-            }
-            else
-            {
-                return segment;
-            }
-        }
-
-        return default;
+        SponsorBlockTipText = null;
+        RequestHideSponsorBlockTip?.Invoke(this, EventArgs.Empty);
     }
 
-    private void ApplySponsorSettings()
+    private async Task SkipSponsorSegmentAsync(SponsorBlockSegment segment, double targetPosition, int generation)
     {
-        var enabled = SettingsToolkit.ReadLocalSetting(SettingNames.SponsorBlockEnabled, true);
-        var autoSkip = SettingsToolkit.ReadLocalSetting(SettingNames.AutoSkipSponsor, true);
+        if (Client is null || generation != _sponsorBlockGeneration)
+        {
+            return;
+        }
 
-        _isApplyingSponsorSettings = true;
+        _isSponsorBlockSeeking = true;
         try
         {
-            IsSponsorBlockEnabled = enabled;
-            AutoSkipSponsor = autoSkip;
+            await Client.SetCurrentPositionAsync(targetPosition);
+
+            var categoryName = SponsorBlockCategoryHelper.GetDisplayName(segment.Category);
+            var message = string.Format(
+                ResourceToolkit.GetLocalizedString(StringNames.SponsorBlockSkippedTemplate),
+                categoryName);
+            Window?.ShowTip(message, InfoType.Success);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "空降助手跳转失败");
         }
         finally
         {
-            _isApplyingSponsorSettings = false;
+            if (generation == _sponsorBlockGeneration)
+            {
+                _isSponsorBlockSeeking = false;
+            }
         }
     }
 
-    private void SyncSponsorSettingsFromStorage()
+    private void NotifySponsorBlockSegmentsChanged()
+        => queue.TryEnqueue(() => SponsorBlockSegmentsChanged?.Invoke(this, EventArgs.Empty));
+
+    private void ApplySponsorBlockSettings()
+    {
+        _isApplyingSponsorBlockSettings = true;
+        try
+        {
+            IsSponsorBlockEnabled = SettingsToolkit.ReadLocalSetting(SettingNames.SponsorBlockEnabled, true);
+            AutoSkipSponsor = SettingsToolkit.ReadLocalSetting(SettingNames.AutoSkipSponsor, true);
+        }
+        finally
+        {
+            _isApplyingSponsorBlockSettings = false;
+        }
+    }
+
+    private void SyncSponsorBlockSettings()
     {
         var enabled = SettingsToolkit.ReadLocalSetting(SettingNames.SponsorBlockEnabled, true);
         var autoSkip = SettingsToolkit.ReadLocalSetting(SettingNames.AutoSkipSponsor, true);
-
         if (enabled != IsSponsorBlockEnabled)
         {
             IsSponsorBlockEnabled = enabled;
@@ -216,93 +328,31 @@ public sealed partial class PlayerViewModel
         }
     }
 
-    private void ClearSponsorState()
-    {
-        _sponsorSegments = [];
-        _currentSponsorSegment = null;
-        _lastSponsorCheckTicks = 0;
-        OnPropertyChanged(nameof(SponsorSegments));
-        IsSponsorSkipNoticeVisible = false;
-    }
-
-    private void ShowSponsorSkipNotice(string message)
-    {
-        SponsorSkipNoticeText = message;
-        IsSponsorSkipNoticeVisible = true;
-
-        if (_sponsorNoticeTimer is null)
-        {
-            _sponsorNoticeTimer = queue.CreateTimer();
-            _sponsorNoticeTimer.Interval = TimeSpan.FromMilliseconds(SponsorNoticeDurationMs);
-            _sponsorNoticeTimer.Tick += OnSponsorNoticeTimerTick;
-        }
-
-        _sponsorNoticeTimer.Stop();
-        _sponsorNoticeTimer.Start();
-    }
-
-    private void OnSponsorNoticeTimerTick(DispatcherQueueTimer sender, object args)
-    {
-        IsSponsorSkipNoticeVisible = false;
-        sender.Stop();
-    }
-
-    private void DisposeSponsorBlock()
-    {
-        if (_sponsorNoticeTimer is not null)
-        {
-            _sponsorNoticeTimer.Tick -= OnSponsorNoticeTimerTick;
-            _sponsorNoticeTimer.Stop();
-            _sponsorNoticeTimer = null;
-        }
-
-        _sponsorSegments = [];
-        _currentSponsorSegment = null;
-    }
-
     partial void OnIsSponsorBlockEnabledChanged(bool value)
     {
-        if (_isApplyingSponsorSettings)
+        if (_isApplyingSponsorBlockSettings)
         {
             return;
         }
 
         SettingsToolkit.WriteLocalSetting(SettingNames.SponsorBlockEnabled, value);
-        if (value)
+        if (value && Player?.IsPlaybackInitialized == true)
         {
-            _ = LoadSponsorSegmentsAsync();
+            StartSponsorBlockLoading();
         }
-        else
+        else if (!value)
         {
-            ClearSponsorState();
+            ResetSponsorBlock();
         }
     }
 
     partial void OnAutoSkipSponsorChanged(bool value)
     {
-        if (_isApplyingSponsorSettings)
+        if (_isApplyingSponsorBlockSettings)
         {
             return;
         }
 
         SettingsToolkit.WriteLocalSetting(SettingNames.AutoSkipSponsor, value);
     }
-
-    private static string GetSponsorCategoryName(SponsorCategory category)
-        => category switch
-        {
-            SponsorCategory.Sponsor => "赞助广告",
-            SponsorCategory.SelfPromo => "自我推广",
-            SponsorCategory.ExclusiveAccess => "独家内容",
-            SponsorCategory.Interaction => "互动提示",
-            SponsorCategory.POI_Highlight => "高亮时刻",
-            SponsorCategory.Intro => "开场动画",
-            SponsorCategory.Outro => "结尾感谢",
-            SponsorCategory.Preview => "预告",
-            SponsorCategory.Padding => "填充",
-            SponsorCategory.Filler => "废话",
-            SponsorCategory.Music_Offtopic => "无关音乐",
-            SponsorCategory.Unpaid => "不可跳过",
-            _ => "赞助片段",
-        };
 }

@@ -3196,7 +3196,7 @@
     <value>空降助手</value>
   </data>
   <data name="SponsorBlockDescription" xml:space="preserve">
-    <value>自动跳过视频中的赞助片段、自我推广等内容，数据来源于 SponsorBlock 社区</value>
+    <value>按片段类别自动跳过、静音或显示跳过提示（数据来自 SponsorBlock，仅发送 BV 号与分 P ID）</value>
   </data>
   <data name="SponsorBlockEnabled" xml:space="preserve">
     <value>启用空降助手</value>
@@ -3260,5 +3260,35 @@
   </data>
   <data name="ManualSignInEntry" xml:space="preserve">
     <value>手动登录（实验性）</value>
+  </data>
+  <data name="SponsorBlockBehavior" xml:space="preserve">
+    <value>按类别设置行为</value>
+  </data>
+  <data name="SponsorBlockBehaviorDescription" xml:space="preserve">
+    <value>为不同片段类别选择自动跳过、仅静音、显示跳过按钮或不处理</value>
+  </data>
+  <data name="SponsorBlockBehaviorNone" xml:space="preserve">
+    <value>不处理</value>
+  </data>
+  <data name="SponsorBlockBehaviorSkip" xml:space="preserve">
+    <value>自动跳过</value>
+  </data>
+  <data name="SponsorBlockBehaviorMute" xml:space="preserve">
+    <value>仅静音</value>
+  </data>
+  <data name="SponsorBlockBehaviorShowButton" xml:space="preserve">
+    <value>显示跳过按钮</value>
+  </data>
+  <data name="SponsorBlockSkipButton" xml:space="preserve">
+    <value>跳过</value>
+  </data>
+  <data name="SponsorBlockPromptTemplate" xml:space="preserve">
+    <value>检测到{0}，点击跳过</value>
+  </data>
+  <data name="SponsorBlockSkippedTemplate" xml:space="preserve">
+    <value>已跳过：{0}</value>
+  </data>
+  <data name="SponsorBlockMarkerTimeRange" xml:space="preserve">
+    <value>{0} – {1}</value>
   </data>
 </root>

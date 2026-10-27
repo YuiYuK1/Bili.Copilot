@@ -135,6 +135,11 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     private readonly List<SegmentVisual> _segments = [];
     private readonly List<(double Start, double End)> _cachedRanges = [];
 
+    /// <summary>
+    /// 空降片段标记的覆盖层。自身不参与命中测试，由控件按标记矩形统一判定.
+    /// </summary>
+    private readonly Canvas _markerLayer = new() { IsHitTestVisible = false };
+
     private readonly Ellipse _thumbInner = new()
     {
         Width = ThumbSize,
@@ -296,6 +301,10 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
         _hoverPopup.Child = _hoverStack;
 
         _thumb.Child = _thumbInner;
+
+        // 章节分段容器通过 Insert(0) 加在最底层，因此标记层位于分段之上、
+        // 圆点与悬浮层之下.
+        _canvas.Children.Add(_markerLayer);
         _canvas.Children.Add(_thumb);
         _canvas.Children.Add(_hoverPopup);
 
@@ -517,6 +526,8 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
         viewModel.ChapterInitialized += OnChapterInitialized;
         viewModel.CacheStateChanged -= OnCacheStateChanged;
         viewModel.CacheStateChanged += OnCacheStateChanged;
+        viewModel.SponsorBlockSegmentsChanged -= OnSponsorBlockSegmentsChanged;
+        viewModel.SponsorBlockSegmentsChanged += OnSponsorBlockSegmentsChanged;
         viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
@@ -530,6 +541,7 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
 
         viewModel.ChapterInitialized -= OnChapterInitialized;
         viewModel.CacheStateChanged -= OnCacheStateChanged;
+        viewModel.SponsorBlockSegmentsChanged -= OnSponsorBlockSegmentsChanged;
         viewModel.PropertyChanged -= OnViewModelPropertyChanged;
     }
 

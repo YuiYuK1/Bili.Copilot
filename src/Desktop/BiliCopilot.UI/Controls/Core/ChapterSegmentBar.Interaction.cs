@@ -1,5 +1,6 @@
 // Copyright (c) Bili Copilot. All rights reserved.
 
+using BiliCopilot.UI.SponsorBlock;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Animation;
 
@@ -19,6 +20,17 @@ public sealed partial class ChapterSegmentBar
 
         var point = e.GetCurrentPoint(_canvas);
         var x = point.Position.X;
+
+        // 空降标记优先于普通按位置跳转。目标是片段终点（裁剪到视频时长）.
+        var marker = HitTestMarker(x, point.Position.Y);
+        if (marker is SponsorBlockMarker hit
+            && TryGetSponsorSegment(hit.SegmentIndex, out var sponsorSegment))
+        {
+            e.Handled = true;
+            await SeekAsync(Math.Min(sponsorSegment.End, Duration));
+            return;
+        }
+
         var segment = HitTest(x);
         _isPressed = true;
         _isDragging = false;
@@ -76,13 +88,20 @@ public sealed partial class ChapterSegmentBar
             return;
         }
 
+        var markerHit = HitTestMarker(x, point.Position.Y);
+        if (markerHit != _hoveredMarker)
+        {
+            SetHoveredMarker(markerHit);
+        }
+
         var hovered = HitTest(x);
         if (hovered?.Start != _hovered?.Start)
         {
             SetHovered(hovered);
         }
 
-        UpdateCursor(IsOnVerticalEdge(point.Position.Y));
+        // 标记可点击，用与章节边缘一致的手形光标提示.
+        UpdateCursor(markerHit is not null || IsOnVerticalEdge(point.Position.Y));
         UpdateHoverPopup(x);
     }
 
@@ -174,7 +193,11 @@ public sealed partial class ChapterSegmentBar
         }
 
         // 先写入文本再显示，否则可见瞬间内容为空，会出现空白浮层.
-        UpdatePopupText(x, duration, width);
+        // 悬浮在空降标记上时文本已在 SetHoveredMarker 中写入，此处不覆盖.
+        if (_hoveredMarker is null)
+        {
+            UpdatePopupText(x, duration, width);
+        }
 
         if (_hoverPopup.Visibility == Visibility.Visible && Math.Abs(x - _lastPopupX) < PopupMoveThreshold)
         {
@@ -252,6 +275,7 @@ public sealed partial class ChapterSegmentBar
 
         _lastPopupX = double.NaN;
         _lastPopupTime = double.NaN;
+        _hoveredMarker = null;
     }
 
     private void SetHovered(SegmentVisual? segment)

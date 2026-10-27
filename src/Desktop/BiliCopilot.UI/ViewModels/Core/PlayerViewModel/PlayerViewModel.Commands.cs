@@ -582,6 +582,9 @@ public sealed partial class PlayerViewModel
             return;
         }
 
+        // 用户在静音片段播放期间手动切换静音时，尊重用户的选择，
+        // 控制器不会再自动静音或恢复.
+        SponsorBlockController.NotifyUserMuteChanged();
         IsMute = !IsMute;
         await Client.SetMuteAsync(IsMute);
     }

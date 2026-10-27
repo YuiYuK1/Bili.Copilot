@@ -21,6 +21,8 @@ public sealed partial class ChapterSegmentBar
         var width = _canvas.ActualWidth;
         if (ViewModel is null || duration <= 0 || width <= 0)
         {
+            // 切换分 P 时总时长会短暂归零，必须同时清掉上一个分 P 的片段标记.
+            ClearMarkers();
             return;
         }
 
@@ -59,6 +61,9 @@ public sealed partial class ChapterSegmentBar
         UpdateCache();
         UpdateFill();
         UpdateCurrentChapter();
+
+        // 标记只在章节 / 尺寸 / 片段列表变化时重建，播放位置更新不会走到这里.
+        RebuildMarkers();
     }
 
     /// <summary>

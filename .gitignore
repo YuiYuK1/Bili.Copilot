@@ -369,3 +369,8 @@ tools/Prompt.txt
 src/Desktop/BiliCopilot.UI/Assets/WheelScrollService.exe
 src/Desktop/BiliCopilot.UI/Assets/WheelScrollService.dll
 src/Desktop/BiliCopilot.UI/Assets/WheelScrollService.runtimeconfig.json
+
+# Agent work directories
+/.dsh/
+/.claude/
+/.dsh_better_edit/

@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Models.Constants;
 using BiliCopilot.UI.ViewModels.Items;
@@ -41,6 +41,7 @@ public sealed partial class PgcSearchSectionDetailViewModel : ViewModelBase, ISe
     public void Clear()
     {
         _partition = default;
+        _offset = string.Empty;
         _keyword = string.Empty;
         IsEmpty = false;
         _canRequest = false;

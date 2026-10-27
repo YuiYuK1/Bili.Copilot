@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Controls.AI;
 using BiliCopilot.UI.Models.Constants;
@@ -73,6 +73,8 @@ public sealed partial class SettingsPageViewModel : AISettingsViewModelBase
         MaxCacheSize = SettingsToolkit.ReadLocalSetting(SettingNames.MaxCacheSize, 300d); // Default to 300 MB
         MaxBackCacheSize = SettingsToolkit.ReadLocalSetting(SettingNames.MaxBackCacheSize, 0d); // Default to 0 MB
         MaxCacheSeconds = SettingsToolkit.ReadLocalSetting(SettingNames.MaxCacheSeconds, 300d); // Default to 300 seconds
+        IsSponsorBlockEnabled = SettingsToolkit.ReadLocalSetting(SettingNames.SponsorBlockEnabled, true);
+        AutoSkipSponsor = SettingsToolkit.ReadLocalSetting(SettingNames.AutoSkipSponsor, true);
         HrSeek = SettingsToolkit.ReadLocalSetting(SettingNames.HrSeek, HrSeekType.Default);
         MaxVolume = SettingsToolkit.ReadLocalSetting(SettingNames.MaxVolume, 100d);
         AudioExclusiveEnabled = SettingsToolkit.ReadLocalSetting(SettingNames.AudioExclusiveEnabled, false);
@@ -554,4 +556,10 @@ public sealed partial class SettingsPageViewModel : AISettingsViewModelBase
 
     partial void OnVulkanDeviceNameChanged(string value)
         => SettingsToolkit.WriteLocalSetting(SettingNames.VulkanDeviceName, value);
+
+    partial void OnIsSponsorBlockEnabledChanged(bool value)
+        => SettingsToolkit.WriteLocalSetting(SettingNames.SponsorBlockEnabled, value);
+
+    partial void OnAutoSkipSponsorChanged(bool value)
+        => SettingsToolkit.WriteLocalSetting(SettingNames.AutoSkipSponsor, value);
 }

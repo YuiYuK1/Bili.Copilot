@@ -472,6 +472,7 @@ public sealed partial class PlayerViewModel
             PositionText = TimeSpan.FromSeconds(Player.Position).ToString(@"hh\:mm\:ss");
             ProgressChanged?.Invoke(this, Player.Position);
             Danmaku.UpdatePosition(Convert.ToInt32(Player.Position));
+            await CheckAndSkipSponsorAsync(Player.Position);
             // 按“当前时间落在哪个章节区间”判定正在播放的章节.
             // 旧实现用 |Position - 章节起点| < 2，只在经过起点前后两秒内为真，
             // 因此播放推进到章节中段时高亮会消失.

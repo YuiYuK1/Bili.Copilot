@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -10,9 +10,9 @@ namespace BiliCopilot.UI.Controls.Core;
 /// </summary>
 public sealed partial class ChapterSegmentBar
 {
-    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    private async void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (!IsInteractive)
+        if (!IsInteractive || Duration <= 0 || _canvas.ActualWidth <= 0)
         {
             return;
         }
@@ -20,26 +20,33 @@ public sealed partial class ChapterSegmentBar
         var point = e.GetCurrentPoint(_canvas);
         var x = point.Position.X;
         var segment = HitTest(x);
-        if (segment is null)
-        {
-            return;
-        }
-
-        _pressed = segment;
+        _isPressed = true;
         _isDragging = false;
         _pressX = x;
 
-        // 上下边缘带代表“粗定位到轨道”，轨道本身才是精确跳转。
-        _pressOnEdge = IsOnVerticalEdge(point.Position.Y);
+        // 有章节时，轨道上下边缘代表“跳到本章节起点”；无章节时
+        // IsOnVerticalEdge 恒为 false，整条高度都用于精确跳转.
+        _pressOnEdge = segment is not null && IsOnVerticalEdge(point.Position.Y);
         if (_pressOnEdge)
         {
-            _edgeChapterStart = segment.Start;
+            _edgeChapterStart = segment!.Start;
         }
 
         CapturePointer(e.Pointer);
         e.Handled = true;
 
         UpdateThumbScale();
+
+        // 按下即跳转：不依赖 PointerReleased，避免释放事件被吞
+        // （或先触发 PointerExited）时点击无效、需要再点一次.
+        if (_pressOnEdge)
+        {
+            await SeekAsync(_edgeChapterStart);
+        }
+        else
+        {
+            await SeekToXAsync(_pressX);
+        }
     }
 
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
@@ -52,7 +59,7 @@ public sealed partial class ChapterSegmentBar
         var point = e.GetCurrentPoint(_canvas);
         var x = point.Position.X;
 
-        if (_pressed is not null)
+        if (_isPressed)
         {
             if (!_isDragging && Math.Abs(x - _pressX) >= DragThreshold)
             {
@@ -81,40 +88,22 @@ public sealed partial class ChapterSegmentBar
 
     private async void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        var segment = _pressed;
+        var wasPressed = _isPressed;
         var wasDragging = _isDragging;
         var dragTarget = _dragPosition;
-        _pressed = null;
+        _isPressed = false;
         _isDragging = false;
         ReleasePointerCapture(e.Pointer);
         UpdateThumbScale();
 
-        if (segment is null)
-        {
-            _dragPosition = null;
-            return;
-        }
-
-        if (!wasDragging)
-        {
-            // 落在轨道上下边缘带时跳到所在章节起点；落在轨道上则按点击位置精确跳转.
-            if (_pressOnEdge)
-            {
-                await SeekAsync(_edgeChapterStart);
-            }
-            else
-            {
-                await SeekToXAsync(_pressX);
-            }
-        }
-        else if (dragTarget is double target)
+        if (wasPressed && wasDragging && dragTarget is double target)
         {
             // 拖动结束再补一次精确落点，弥补节流期间的偏差.
+            // 单击的跳转已在按下时完成，这里不再重复，避免一次点击触发两次 seek.
             await SeekAsync(target);
         }
 
         _pressOnEdge = false;
-
         _dragPosition = null;
         UpdateFill();
     }
@@ -125,13 +114,13 @@ public sealed partial class ChapterSegmentBar
         UpdateCursor(false);
         HideHoverPopup();
 
-        if (_pressed is null)
+        if (_isPressed)
         {
-            return;
+            _isPressed = false;
+            _isDragging = false;
         }
 
-        _pressed = null;
-        _isDragging = false;
+        UpdateThumbScale();
     }
 
     /// <summary>
@@ -296,7 +285,7 @@ public sealed partial class ChapterSegmentBar
     /// </summary>
     private void UpdateThumbScale()
     {
-        var target = _pressed is not null
+        var target = _isPressed
             ? ThumbPressedScale
             : _hovered is not null
                 ? 1d
@@ -399,8 +388,25 @@ public sealed partial class ChapterSegmentBar
             return;
         }
 
+        var clamped = Math.Clamp(target, 0, Duration);
+
+        // 与播放器内部判定保持一致：目标离当前位置太近时它根本不会跳转，
+        // 此时若仍记录乐观位置，进度条就会停在原处骗人.
+        if (Math.Abs(Position - clamped) < MinSeekDelta)
+        {
+            _pendingSeekPosition = null;
+            UpdateFill();
+            return;
+        }
+
+        // 先记录目标位置并刷新填充，让点击立即有视觉反馈；
+        // 播放器回报新 Position 后，由 OnPlayerPropertyChanged 收敛掉该值.
+        _pendingSeekPosition = clamped;
+        _pendingSeekDeadline = Environment.TickCount64 + PendingSeekTtlMs;
+        UpdateFill();
+
         // PreviewPosition 属于播放器手势预览的语义，不用于传递进度条拖动位置.
-        await ViewModel.ChangePositionAsync(Math.Clamp(target, 0, Duration));
+        await ViewModel.ChangePositionAsync(clamped);
         UpdateFill();
     }
 }

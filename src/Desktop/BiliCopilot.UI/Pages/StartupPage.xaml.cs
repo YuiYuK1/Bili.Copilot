@@ -1,5 +1,6 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
+using BiliCopilot.UI.Controls.Account;
 using BiliCopilot.UI.Forms;
 using BiliCopilot.UI.ViewModels.Core;
 using BiliCopilot.UI.ViewModels.View;
@@ -37,6 +38,20 @@ public sealed partial class StartupPage : StartupPageBase
         else
         {
             new WebSignInWindow().Activate();
+        }
+    }
+
+    private async void OnManualSignInButtonClickAsync(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ManualSignInDialog
+        {
+            XamlRoot = XamlRoot,
+        };
+
+        await dialog.ShowAsync();
+        if (dialog.IsSignedIn)
+        {
+            ViewModel.ExitCommand.Execute(true);
         }
     }
 

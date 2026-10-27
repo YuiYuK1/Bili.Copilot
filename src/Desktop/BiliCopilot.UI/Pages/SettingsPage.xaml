@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <local:SettingsPageBase
     x:Class="BiliCopilot.UI.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -37,21 +37,24 @@
             Height="1"
             HorizontalAlignment="Stretch"
             Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-        <ScrollView
+        <!--
+            设置页使用 ScrollViewer 而不是 ScrollView：页内大量 SettingsExpander 会动态
+            改变内容高度，ScrollView 在内容高度变化后滚到末端时会出现位置回跳。
+            ScrollViewer 的布局与滚动偏移更稳定。
+        -->
+        <ScrollViewer
             x:Name="GenericContainer"
             Grid.Row="2"
             Padding="16,0"
-            Style="{StaticResource PageScrollViewStyle}">
+            Style="{StaticResource PageScrollViewerStyle}">
             <StackPanel Margin="0,12" Spacing="4">
-                <StackPanel.ChildrenTransitions>
-                    <RepositionThemeTransition IsStaggeringEnabled="False" />
-                </StackPanel.ChildrenTransitions>
                 <TextBlock
                     Margin="0,8,0,4"
                     HorizontalAlignment="Left"
                     Text="{ext:Locale Name=Player}" />
                 <settings:PlayerControlSettingControl />
                 <settings:PlayerBehaviorSettingControl />
+                <settings:SponsorBlockSettingControl />
                 <settings:MpvExtraSettingControl />
                 <settings:ScreenshotSettingControl />
                 <settings:DownloadSettingControl />
@@ -114,17 +117,14 @@
                         NavigateUri="https://bili.richasy.net" />
                 </StackPanel>
             </StackPanel>
-        </ScrollView>
-        <ScrollView
+        </ScrollViewer>
+        <ScrollViewer
             x:Name="AIContainer"
             Grid.Row="2"
             Padding="16,0"
-            Style="{StaticResource PageScrollViewStyle}"
+            Style="{StaticResource PageScrollViewerStyle}"
             Visibility="Collapsed">
             <StackPanel Margin="0,12">
-                <StackPanel.ChildrenTransitions>
-                    <RepositionThemeTransition IsStaggeringEnabled="False" />
-                </StackPanel.ChildrenTransitions>
                 <InfoBar
                     Title="{ext:Locale Name=AISettingHeaderTitle}"
                     Margin="0,0,0,8"
@@ -142,12 +142,8 @@
                 </InfoBar>
                 <settings:AIResponseSettingControl Margin="0,0,0,4" />
                 <settings:PromptTemplateSettingControl Margin="0,0,0,4" />
-                <StackPanel x:Name="AIPanel" Spacing="4">
-                    <StackPanel.ChildrenTransitions>
-                        <RepositionThemeTransition IsStaggeringEnabled="False" />
-                    </StackPanel.ChildrenTransitions>
-                </StackPanel>
+                <StackPanel x:Name="AIPanel" Spacing="4" />
             </StackPanel>
-        </ScrollView>
+        </ScrollViewer>
     </Grid>
 </local:SettingsPageBase>

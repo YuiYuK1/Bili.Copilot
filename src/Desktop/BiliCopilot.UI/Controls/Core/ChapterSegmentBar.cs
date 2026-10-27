@@ -1,10 +1,11 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.ViewModels.Core;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
+using Richasy.MpvKernel.Player;
 
 namespace BiliCopilot.UI.Controls.Core;
 
@@ -68,6 +69,23 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     /// 拖动时下发给播放器的跳转间隔（毫秒）。视觉填充逐帧跟随，但真实 seek 需节流.
     /// </summary>
     private const int SeekThrottleMs = 90;
+
+    /// <summary>
+    /// 判定播放器已抵达跳转目标的容差（秒）.
+    /// </summary>
+    private const double SeekSettleThreshold = 1.5d;
+
+    /// <summary>
+    /// 目标位置与当前播放位置的差值小于该值时不再下发跳转，
+    /// 与 <see cref="PlayerViewModel.ChangePositionAsync"/> 的内部判定保持一致.
+    /// </summary>
+    private const double MinSeekDelta = 2d;
+
+    /// <summary>
+    /// 乐观显示位置的最长存活时间（毫秒）。播放器可能因关键帧对齐到不了目标，
+    /// 必须超时清除，否则进度条会永久停在跳转点.
+    /// </summary>
+    private const int PendingSeekTtlMs = 2000;
 
     /// <summary>
     /// 控件总高：轨道在其中垂直居中，父级按中心对齐时与两侧时间文本齐平.
@@ -178,32 +196,9 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
         DependencyProperty.Register(nameof(IsInteractive), typeof(bool), typeof(ChapterSegmentBar), new PropertyMetadata(true, OnInteractiveChanged));
 
     private SegmentVisual? _hovered;
-    private SegmentVisual? _pressed;
+    private bool _isPressed;
     private bool _isDragging;
     private double _pressX;
-    private Brush? _playedBrush;
-    private Brush? _trackBrush;
-    private Brush? _cacheBrush;
-    private double _lastPopupX = double.NaN;
-    private double _lastPopupTime = double.NaN;
-    private double _hoverPopupHeight;
-    private long _lastSeekTicks;
-    private bool _seekInFlight;
-
-    /// <summary>
-    /// 是否存在真实章节。无章节时只有一个整段，不应对悬浮做出放大反应.
-    /// </summary>
-    private bool _hasChapters;
-
-    /// <summary>
-    /// 拖动期间的预览位置，让填充立即跟随光标而不必等待播放器回调.
-    /// </summary>
-    private double? _dragPosition;
-
-    /// <summary>
-    /// 当前所在章节下标，用于避免每帧重算章节高亮.
-    /// </summary>
-    private int _currentChapterIndex = -1;
 
     /// <summary>
     /// 指针当前是否位于章节边缘热区内.
@@ -224,6 +219,58 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     /// 当前光标形状，避免重复创建 InputSystemCursor.
     /// </summary>
     private InputSystemCursorShape? _cursorShape;
+    private Brush? _playedBrush;
+    private Brush? _trackBrush;
+    private Brush? _cacheBrush;
+    private double _lastPopupX = double.NaN;
+    private double _lastPopupTime = double.NaN;
+    private double _hoverPopupHeight;
+    private long _lastSeekTicks;
+    private bool _seekInFlight;
+
+    /// <summary>
+    /// 当前订阅的播放器实例。播放器是延迟创建的，视图模型设置时可能还是 null，
+    /// 因此必须在 Player 属性变化后重新挂接，否则进度条收不到 Position 更新.
+    /// </summary>
+    private MpvPlayer? _attachedPlayer;
+
+    /// <summary>
+    /// 是否存在真实章节。无章节时只有一个整段，不应对悬浮做出放大反应.
+    /// </summary>
+    private bool _hasChapters;
+
+    /// <summary>
+    /// 拖动期间的预览位置，让填充立即跟随光标而不必等待播放器回调.
+    /// </summary>
+    private double? _dragPosition;
+
+    /// <summary>
+    /// 跳转后的目标位置。播放器上报新 Position 之前先用它绘制填充，
+    /// 否则跳转瞬间会读到旧 Position 而把进度条弹回原位，看起来像是没跳到.
+    /// </summary>
+    private double? _pendingSeekPosition;
+
+    /// <summary>
+    /// <see cref="_pendingSeekPosition"/> 的失效时刻（<see cref="Environment.TickCount64"/> 毫秒）.
+    /// </summary>
+    private long _pendingSeekDeadline;
+
+    /// <summary>
+    /// 上一帧已绘制的状态，用于避免每帧重复写入 XAML.
+    /// </summary>
+    private double _lastAppliedPosition = double.NaN;
+    private double _lastAppliedWidth = -1d;
+    private double _lastAppliedDuration = -1d;
+
+    /// <summary>
+    /// 是否已挂上渲染回调.
+    /// </summary>
+    private bool _renderingHooked;
+
+    /// <summary>
+    /// 当前所在章节下标，用于避免每帧重算章节高亮.
+    /// </summary>
+    private int _currentChapterIndex = -1;
 
     /// <summary>
     /// 圆点缩放动画，复用以避免每次悬浮重建时间线.
@@ -253,7 +300,13 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
         _canvas.Children.Add(_hoverPopup);
 
         Loaded += OnLoadedHandler;
-        Unloaded += (_, _) => HideHoverPopup();
+        Unloaded += (_, _) =>
+        {
+            HideHoverPopup();
+            StopRenderLoop();
+            DetachViewModel(ViewModel);
+            DetachPlayer();
+        };
         SizeChanged += (_, _) => Rebuild();
 
         PointerPressed += OnPointerPressed;
@@ -314,8 +367,67 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
         _trackBrush = TrackResolvedBrush;
         _cacheBrush = CacheResolvedBrush;
         ApplyThumbBrushes();
+        AttachViewModel(ViewModel);
         AttachPlayer();
         Rebuild();
+        StartRenderLoop();
+    }
+
+    /// <summary>
+    /// 挂上渲染回调。单纯依赖 <c>PropertyChanged</c> 会在订阅时机或控件可见性
+    /// 变化时漏掉更新（迷你进度条初始为 Collapsed，转为可见时可能既没有尺寸变化
+    /// 事件也没有位置事件），因此每帧只比对目标位置，变化时才重绘.
+    /// </summary>
+    private void StartRenderLoop()
+    {
+        if (_renderingHooked)
+        {
+            return;
+        }
+
+        _renderingHooked = true;
+        CompositionTarget.Rendering += OnRendering;
+    }
+
+    private void StopRenderLoop()
+    {
+        if (!_renderingHooked)
+        {
+            return;
+        }
+
+        _renderingHooked = false;
+        CompositionTarget.Rendering -= OnRendering;
+    }
+
+    /// <summary>
+    /// 每帧检查是否需要重绘：位置、宽度或时长任一变化才写 XAML.
+    /// </summary>
+    private void OnRendering(object? sender, object e)
+    {
+        var duration = Duration;
+        var width = _canvas.ActualWidth;
+        if (duration <= 0 || width <= 0)
+        {
+            return;
+        }
+
+        if (_segments.Count == 0)
+        {
+            // 控件从 Collapsed 变为可见时宽度才确定，此时补建分段.
+            Rebuild();
+            return;
+        }
+
+        var position = ResolveDisplayPosition();
+        if (Math.Abs(position - _lastAppliedPosition) < 0.04
+            && Math.Abs(width - _lastAppliedWidth) < 0.5
+            && Math.Abs(duration - _lastAppliedDuration) < 0.001)
+        {
+            return;
+        }
+
+        ApplyFill(position, duration, width);
     }
 
     private void ApplyBarHeight()
@@ -325,6 +437,9 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
 
         foreach (var segment in _segments)
         {
+            // 分段容器以整条热区高度绘制，并靠负的 Top 让轨道落在控件中线，
+            // 因此高度变化时必须跟着重新定位，否则紧凑模式下轨道会跑到控件之外.
+            Canvas.SetTop(segment.Container, (LayoutHeight - HitAreaHeight) / 2d);
             LayoutTrack(segment, TrackHeight);
         }
     }
@@ -353,14 +468,18 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
             bar.SetHovered(null);
             bar.UpdateCursor(false);
             bar.HideHoverPopup();
-            bar._pressed = null;
+            bar._isPressed = false;
             bar._isDragging = false;
+            bar._pressOnEdge = false;
         }
     }
 
     /// <inheritdoc/>
     protected override void OnControlLoaded()
     {
+        // 基类在首次卸载后会移除自己的 Loaded 订阅，因此这里和构造函数的
+        // Loaded 处理器都要负责重新挂接视图模型与播放器.
+        AttachViewModel(ViewModel);
         AttachPlayer();
         Rebuild();
     }
@@ -368,27 +487,13 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     /// <inheritdoc/>
     protected override void OnViewModelChanged(PlayerViewModel? oldValue, PlayerViewModel? newValue)
     {
-        if (oldValue is not null)
-        {
-            oldValue.ChapterInitialized -= OnChapterInitialized;
-            oldValue.CacheStateChanged -= OnCacheStateChanged;
-            oldValue.PropertyChanged -= OnViewModelPropertyChanged;
-            if (oldValue.Player is not null)
-            {
-                oldValue.Player.PropertyChanged -= OnPlayerPropertyChanged;
-            }
-        }
+        DetachViewModel(oldValue);
+        DetachPlayer();
 
         if (newValue is not null)
         {
-            newValue.ChapterInitialized += OnChapterInitialized;
-            newValue.CacheStateChanged += OnCacheStateChanged;
-            newValue.PropertyChanged += OnViewModelPropertyChanged;
-            if (newValue.Player is not null)
-            {
-                newValue.Player.PropertyChanged += OnPlayerPropertyChanged;
-            }
-
+            AttachViewModel(newValue);
+            AttachPlayer();
             Rebuild();
         }
     }
@@ -396,24 +501,60 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     /// <inheritdoc/>
     protected override void OnControlUnloaded()
     {
-        if (ViewModel is not null)
+        StopRenderLoop();
+        DetachViewModel(ViewModel);
+        DetachPlayer();
+    }
+
+    private void AttachViewModel(PlayerViewModel? viewModel)
+    {
+        if (viewModel is null)
         {
-            ViewModel.ChapterInitialized -= OnChapterInitialized;
-            ViewModel.CacheStateChanged -= OnCacheStateChanged;
-            ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            if (ViewModel.Player is not null)
-            {
-                ViewModel.Player.PropertyChanged -= OnPlayerPropertyChanged;
-            }
+            return;
         }
+
+        viewModel.ChapterInitialized -= OnChapterInitialized;
+        viewModel.ChapterInitialized += OnChapterInitialized;
+        viewModel.CacheStateChanged -= OnCacheStateChanged;
+        viewModel.CacheStateChanged += OnCacheStateChanged;
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void DetachViewModel(PlayerViewModel? viewModel)
+    {
+        if (viewModel is null)
+        {
+            return;
+        }
+
+        viewModel.ChapterInitialized -= OnChapterInitialized;
+        viewModel.CacheStateChanged -= OnCacheStateChanged;
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
     }
 
     private void AttachPlayer()
     {
-        if (ViewModel?.Player is not null)
+        var player = ViewModel?.Player;
+        if (ReferenceEquals(player, _attachedPlayer))
         {
-            ViewModel.Player.PropertyChanged -= OnPlayerPropertyChanged;
-            ViewModel.Player.PropertyChanged += OnPlayerPropertyChanged;
+            return;
+        }
+
+        DetachPlayer();
+        _attachedPlayer = player;
+        if (_attachedPlayer is not null)
+        {
+            _attachedPlayer.PropertyChanged += OnPlayerPropertyChanged;
+        }
+    }
+
+    private void DetachPlayer()
+    {
+        if (_attachedPlayer is not null)
+        {
+            _attachedPlayer.PropertyChanged -= OnPlayerPropertyChanged;
+            _attachedPlayer = null;
         }
     }
 
@@ -436,8 +577,14 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
 
     private void OnPlayerPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is "Position")
+        if (e.PropertyName is nameof(MpvPlayer.Position))
         {
+            // 播放器抵达跳转目标后，放弃乐观显示位置，改回真实位置.
+            if (_pendingSeekPosition is double pending && Math.Abs(Position - pending) <= SeekSettleThreshold)
+            {
+                _pendingSeekPosition = null;
+            }
+
             UpdateFill();
 
             // 只有跨过章节边界时才需要重新计算高亮，避免每帧遍历章节.
@@ -445,6 +592,14 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
             {
                 UpdateCurrentChapter();
             }
+        }
+        else if (e.PropertyName is nameof(MpvPlayer.Duration))
+        {
+            // 切换视频后，上一个视频的跳转目标已无意义.
+            _pendingSeekPosition = null;
+
+            // 时长在加载完成后才确定；此时重建分段才能得到正确的宽度比例.
+            DispatcherQueue.TryEnqueue(Rebuild);
         }
     }
 
@@ -479,7 +634,13 @@ public sealed partial class ChapterSegmentBar : PlayerControlBase
     /// </summary>
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(PlayerViewModel.PreviewPosition) or nameof(PlayerViewModel.IsPreviewProgressChanging))
+        if (e.PropertyName is nameof(PlayerViewModel.Player))
+        {
+            // Player 是延迟创建的：视图模型先于播放器设置时，这里必须补挂接.
+            AttachPlayer();
+            DispatcherQueue.TryEnqueue(Rebuild);
+        }
+        else if (e.PropertyName is nameof(PlayerViewModel.PreviewPosition) or nameof(PlayerViewModel.IsPreviewProgressChanging))
         {
             DispatcherQueue.TryEnqueue(UpdateFill);
         }

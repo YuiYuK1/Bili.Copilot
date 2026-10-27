@@ -57,13 +57,10 @@ public sealed partial class CacheBar : PlayerControlBase
                 rangeIndex++;
             }
 
-            if (rangeIndex < RootGrid.Children.Count - 1)
+            // 可缓存范围收缩时，清掉超出当前范围数量的残留矩形.
+            while (RootGrid.Children.Count > rangeIndex)
             {
-                // ɾ������ķ�ΧԪ��.
-                for (var i = RootGrid.Children.Count - 1; i > rangeIndex; i--)
-                {
-                    RootGrid.Children.RemoveAt(i);
-                }
+                RootGrid.Children.RemoveAt(RootGrid.Children.Count - 1);
             }
         });
     }

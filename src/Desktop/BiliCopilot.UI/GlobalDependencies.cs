@@ -1,7 +1,9 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Extensions;
 using BiliCopilot.UI.Resolvers;
+using BiliCopilot.UI.Services;
+using BiliCopilot.UI.Services.Interfaces;
 using BiliCopilot.UI.Toolkits;
 using BiliCopilot.UI.ViewModels.Components;
 using BiliCopilot.UI.ViewModels.Core;
@@ -67,6 +69,7 @@ internal static class GlobalDependencies
             .AddDanmakuService()
             .AddSubtitleService()
             .AddPlayerService()
+            .AddSponsorBlockService()
 
             .AddOpenAIChatService()
             .AddAzureOpenAIChatService()
@@ -160,6 +163,12 @@ internal static class GlobalDependencies
     public static IKernelBuilder AddXamlRootProvider(this IKernelBuilder builder)
     {
         builder.Services.AddSingleton<IXamlRootProvider, XamlRootProvider>();
+        return builder;
+    }
+
+    public static IKernelBuilder AddSponsorBlockService(this IKernelBuilder builder)
+    {
+        builder.Services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         return builder;
     }
 

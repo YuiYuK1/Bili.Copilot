@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Controls.Core;
 using BiliCopilot.UI.Forms;
@@ -28,6 +28,7 @@ public sealed partial class PlayerViewModel(DispatcherQueue queue, ILogger<Playe
         Danmaku.ClearAll();
         _nativeMp?.Dispose();
         _nativeMp = null;
+        DisposeSponsorBlock();
 
         if (_rightKeyLongPressTimer != null)
         {
@@ -236,6 +237,7 @@ public sealed partial class PlayerViewModel(DispatcherQueue queue, ILogger<Playe
         ProgressChanged?.Invoke(this, 0);
         await LoadSourcesAsync();
         await LoadSubtitlesAsync();
+        await LoadSponsorSegmentsAsync();
         if (Window.IsClosed)
         {
             return;

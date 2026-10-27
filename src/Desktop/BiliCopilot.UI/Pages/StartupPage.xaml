@@ -41,6 +41,11 @@
                     HorizontalAlignment="Center"
                     Click="OnWebSignInButtonClick"
                     Content="{ext:Locale Name=WebSignIn}" />
+                <HyperlinkButton
+                    HorizontalAlignment="Center"
+                    Click="OnManualSignInButtonClickAsync"
+                    Content="{ext:Locale Name=ManualSignInEntry}"
+                    ToolTipService.ToolTip="{ext:Locale Name=ManualSignInExperimentalTip}" />
             </StackPanel>
             <Border
                 Grid.Column="1"

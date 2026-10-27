@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="BiliCopilot.UI.Controls.Account.ManualSignInDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:ext="using:BiliCopilot.UI.Extensions"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="{ext:Locale Name=ManualSignIn}"
+    CloseButtonText="{ext:Locale Name=Cancel}"
+    DefaultButton="Primary"
+    PrimaryButtonClick="OnPrimaryButtonClickAsync"
+    PrimaryButtonText="{ext:Locale Name=SignIn}"
+    Style="{StaticResource DefaultContentDialogStyle}"
+    mc:Ignorable="d">
+
+    <StackPanel Width="440" Spacing="12">
+        <InfoBar
+            HorizontalAlignment="Stretch"
+            IsClosable="False"
+            IsOpen="True"
+            Message="{ext:Locale Name=ManualSignInExperimental}"
+            Severity="Warning" />
+        <TextBlock
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="{ext:Locale Name=ManualSignInGuide}"
+            TextWrapping="Wrap" />
+        <TextBox
+            x:Name="CookieBox"
+            Height="120"
+            AcceptsReturn="True"
+            FontFamily="Consolas"
+            FontSize="12"
+            PlaceholderText="{ext:Locale Name=ManualSignInPlaceholder}"
+            TextWrapping="Wrap" />
+        <TextBlock
+            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="{ext:Locale Name=ManualSignInPrivacy}"
+            TextWrapping="Wrap" />
+        <TextBlock
+            x:Name="ErrorBlock"
+            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+            TextWrapping="Wrap"
+            Visibility="Collapsed" />
+        <StackPanel
+            x:Name="BusyPanel"
+            Orientation="Horizontal"
+            Spacing="8"
+            Visibility="Collapsed">
+            <ProgressRing
+                Width="16"
+                Height="16"
+                IsActive="True" />
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="{ext:Locale Name=ManualSignInProcessing}" />
+        </StackPanel>
+    </StackPanel>
+</ContentDialog>

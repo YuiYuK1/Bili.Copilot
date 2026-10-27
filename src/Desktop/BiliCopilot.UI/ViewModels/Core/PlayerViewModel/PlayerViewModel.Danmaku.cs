@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Toolkits;
 using CommunityToolkit.Mvvm.Input;
@@ -11,6 +11,16 @@ namespace BiliCopilot.UI.ViewModels.Core;
 
 public sealed partial class PlayerViewModel
 {
+    /// <summary>
+    /// 同时请求的弹幕分片数量。B 站接口对并发敏感，过高会返回空响应.
+    /// </summary>
+    private const int DanmakuSegmentConcurrency = 3;
+
+    /// <summary>
+    /// 单个分片请求的超时时间，避免个别请求挂住导致整个弹幕初始化迟迟不结束.
+    /// </summary>
+    private static readonly TimeSpan DanmakuSegmentTimeout = TimeSpan.FromSeconds(12);
+
     [RelayCommand]
     private async Task InitializeDanmakuAsync()
     {
@@ -23,8 +33,7 @@ public sealed partial class PlayerViewModel
         }
 
         IsDanmakuLoading = true;
-        // 使用限流器，最多同时请求 6 个分段弹幕.
-        var semaphore = new SemaphoreSlim(6, 6);
+        using var semaphore = new SemaphoreSlim(DanmakuSegmentConcurrency, DanmakuSegmentConcurrency);
         var danmakus = new List<DanmakuInformation>();
         try
         {
@@ -67,35 +76,35 @@ public sealed partial class PlayerViewModel
                 ? string.Format(ResourceToolkit.GetLocalizedString(Models.Constants.StringNames.DanmakuCountTemplate), danmakus.Count.ToString("N0"))
                 : ResourceToolkit.GetLocalizedString(Models.Constants.StringNames.DanmakuEmpty);
             Danmaku.Initialize(danmakus);
-            IsDanmakuLoading = false;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to initialize danmaku.");
-            IsDanmakuLoading = false;
             IsDanmakuControlVisible = false;
+        }
+        finally
+        {
+            IsDanmakuLoading = false;
         }
 
         async Task GetDanmakuAsync(int index, string aid, string cid)
         {
+            await semaphore.WaitAsync();
             try
             {
-                await semaphore.WaitAsync();
-                var danmaku = await this.Get<IDanmakuService>().GetSegmentDanmakusWithGrpcAsync(aid, cid, index);
-                lock (danmakus)
+                var segment = await FetchDanmakuSegmentAsync(index, aid, cid);
+                if (segment is { Count: > 0 })
                 {
-                    if (danmaku?.Count > 0)
+                    lock (danmakus)
                     {
-                        danmakus.AddRange(danmaku);
+                        danmakus.AddRange(segment);
                     }
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                logger.LogError(ex, $"获取弹幕分片失败： {index}");
+                semaphore.Release();
             }
-
-            semaphore.Release();
         }
     }
 
@@ -109,5 +118,39 @@ public sealed partial class PlayerViewModel
 
         Danmaku.ClearAll();
         await InitializeDanmakuAsync();
+    }
+
+    /// <summary>
+    /// 获取单个弹幕分片。先走 gRPC；失败后短暂退避，再退回 Web 接口。
+    /// 底层服务自身已对单次请求做了重试，这里只负责切换链路，避免叠加过多请求。
+    /// </summary>
+    private async Task<IReadOnlyList<DanmakuInformation>?> FetchDanmakuSegmentAsync(int index, string aid, string cid)
+    {
+        var service = this.Get<IDanmakuService>();
+
+        try
+        {
+            using var cts = new CancellationTokenSource(DanmakuSegmentTimeout);
+            return await service.GetSegmentDanmakusWithGrpcAsync(aid, cid, index, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("gRPC 获取弹幕分片 {Index} 失败，改用 Web 接口：{Message}", index, ex.Message);
+        }
+
+        // gRPC 接口偶尔会返回空响应（尤其是长视频并发的多个分片），
+        // Web 接口走的是另一条链路，可作为兜底。先退避一下，避免马上撞上限流.
+        await Task.Delay(TimeSpan.FromMilliseconds(250));
+
+        try
+        {
+            using var cts = new CancellationTokenSource(DanmakuSegmentTimeout);
+            return await service.GetSegmentDanmakusWithWebAsync(aid, cid, index, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "获取弹幕分片失败：{Index}", index);
+            return default;
+        }
     }
 }

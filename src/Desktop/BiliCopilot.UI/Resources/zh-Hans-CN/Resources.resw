@@ -3192,4 +3192,73 @@
   <data name="MaxBackCacheSize" xml:space="preserve">
     <value>最大后向缓冲大小（MB）</value>
   </data>
+  <data name="SponsorBlock" xml:space="preserve">
+    <value>空降助手</value>
+  </data>
+  <data name="SponsorBlockDescription" xml:space="preserve">
+    <value>自动跳过视频中的赞助片段、自我推广等内容，数据来源于 SponsorBlock 社区</value>
+  </data>
+  <data name="SponsorBlockEnabled" xml:space="preserve">
+    <value>启用空降助手</value>
+  </data>
+  <data name="SponsorBlockEnabledDescription" xml:space="preserve">
+    <value>开启后将自动识别视频中的赞助片段</value>
+  </data>
+  <data name="AutoSkipSponsor" xml:space="preserve">
+    <value>自动跳过赞助片段</value>
+  </data>
+  <data name="AutoSkipSponsorDescription" xml:space="preserve">
+    <value>播放到赞助片段时自动跳过；关闭后仅显示提示</value>
+  </data>
+  <data name="SponsorSkipped" xml:space="preserve">
+    <value>已跳过：{0}</value>
+  </data>
+  <data name="SponsorDetected" xml:space="preserve">
+    <value>检测到赞助片段：{0}</value>
+  </data>
+  <data name="ManualSignIn" xml:space="preserve">
+    <value>手动登录</value>
+  </data>
+  <data name="ManualSignInGuide" xml:space="preserve">
+    <value>1. 在浏览器中打开并登录 bilibili.com。
+2. 按 F12 打开开发者工具，切换到「网络 / Network」并刷新页面。
+3. 选中任意一个 www.bilibili.com 的请求，在「请求标头 / Request Headers」中找到 Cookie，复制它的完整值。
+4. 将内容粘贴到下方输入框，其中需要包含 SESSDATA 与 bili_jct。</value>
+  </data>
+  <data name="ManualSignInPlaceholder" xml:space="preserve">
+    <value>SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx</value>
+  </data>
+  <data name="ManualSignInPrivacy" xml:space="preserve">
+    <value>Cookie 只保存在本机的应用数据里，仅用于向哔哩哔哩发起请求。</value>
+  </data>
+  <data name="ManualSignInProcessing" xml:space="preserve">
+    <value>正在登录，请稍候……</value>
+  </data>
+  <data name="ManualSignInEmptyTip" xml:space="preserve">
+    <value>请先粘贴从浏览器复制的 Cookie</value>
+  </data>
+  <data name="ManualSignInInvalidTip" xml:space="preserve">
+    <value>无法从输入内容中解析出 Cookie，请检查格式是否为「名称=值; 名称=值」</value>
+  </data>
+  <data name="ManualSignInMissingCookieTip" xml:space="preserve">
+    <value>Cookie 中缺少 {0}，请重新复制完整的 Cookie</value>
+  </data>
+  <data name="ManualSignInFailedTip" xml:space="preserve">
+    <value>登录失败：{0}</value>
+  </data>
+  <data name="ManualSignInNoTokenTip" xml:space="preserve">
+    <value>登录未返回访问令牌，请确认 Cookie 仍然有效后重试</value>
+  </data>
+  <data name="ManualSignInTimeoutTip" xml:space="preserve">
+    <value>登录超时，请检查网络连接后重试</value>
+  </data>
+  <data name="ManualSignInExperimental" xml:space="preserve">
+    <value>实验性功能：用于把 Cookie 换成登录令牌的服务端接口目前可能拒绝请求，登录有失败的可能；建议优先使用扫码登录。</value>
+  </data>
+  <data name="ManualSignInExperimentalTip" xml:space="preserve">
+    <value>实验性功能，可能无法完成登录</value>
+  </data>
+  <data name="ManualSignInEntry" xml:space="preserve">
+    <value>手动登录（实验性）</value>
+  </data>
 </root>

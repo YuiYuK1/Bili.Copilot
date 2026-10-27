@@ -1,4 +1,4 @@
-﻿// Copyright (c) Bili Copilot. All rights reserved.
+// Copyright (c) Bili Copilot. All rights reserved.
 
 using BiliCopilot.UI.Models.Constants;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -243,6 +243,12 @@ public sealed partial class SettingsPageViewModel
 
     [ObservableProperty]
     public partial string VulkanDeviceName { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsSponsorBlockEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool AutoSkipSponsor { get; set; }
 
     /// <summary>
     /// GPU设备列表.

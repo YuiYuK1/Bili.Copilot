@@ -12,10 +12,19 @@ namespace BiliCopilot.UI.Toolkits;
 internal static class ChapterCache
 {
     private const string FolderName = "Chapters";
+
     private static readonly System.Text.Json.JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
+
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+
+    /// <summary>
+    /// 同一进程内串行化读写。两个播放窗口同时打开同一视频时，
+    /// 并发写同一个缓存文件会互相占用临时文件，导致保存失败.
+    /// </summary>
+    private static readonly SemaphoreSlim StorageLock = new(1, 1);
 
     /// <summary>
     /// 生成章节缓存键.
@@ -31,7 +40,7 @@ internal static class ChapterCache
     }
 
     /// <summary>
-    /// 保存章节到本地缓存.
+    /// 保存章节到本地缓存。优先写入用户指定的缓存目录，失败后回退到应用缓存目录.
     /// </summary>
     /// <param name="key">缓存键.</param>
     /// <param name="chapters">章节列表.</param>
@@ -43,6 +52,7 @@ internal static class ChapterCache
             return false;
         }
 
+        string json;
         try
         {
             var payload = chapters.Select(c => new ChapterCacheEntry
@@ -51,59 +61,176 @@ internal static class ChapterCache
                 StartTime = c.StartTime,
                 EndTime = c.EndTime,
             }).ToList();
-            var json = System.Text.Json.JsonSerializer.Serialize(payload, SerializerOptions);
-            var path = GetFilePath(key);
-            var tempPath = $"{path}.tmp";
-            await File.WriteAllTextAsync(tempPath, json, Encoding.UTF8);
-            File.Move(tempPath, path, true);
-            return true;
+            json = System.Text.Json.JsonSerializer.Serialize(payload, SerializerOptions);
         }
         catch
         {
             return false;
         }
+
+        await StorageLock.WaitAsync();
+        try
+        {
+            foreach (var root in GetRootFolders())
+            {
+                string? tempPath = null;
+                try
+                {
+                    var folder = Path.Combine(root, FolderName);
+                    Directory.CreateDirectory(folder);
+                    var path = Path.Combine(folder, $"{key}.json");
+                    tempPath = Path.Combine(folder, $"{key}.{Guid.NewGuid():N}.tmp");
+                    await File.WriteAllTextAsync(tempPath, json, Utf8NoBom);
+                    if (await TryMoveAsync(tempPath, path))
+                    {
+                        tempPath = null;
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"保存章节缓存失败: {ex.Message}");
+                }
+                finally
+                {
+                    if (tempPath is not null)
+                    {
+                        TryDelete(tempPath);
+                    }
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            StorageLock.Release();
+        }
     }
 
     /// <summary>
-    /// 从本地缓存读取章节.
+    /// 从本地缓存读取章节。会依次尝试用户缓存目录与应用缓存目录.
     /// </summary>
     /// <param name="key">缓存键.</param>
     /// <returns>章节列表；没有缓存或读取失败时为空.</returns>
     public static async Task<List<VideoChapter>> LoadAsync(string key)
     {
+        await StorageLock.WaitAsync();
         try
         {
-            var path = GetFilePath(key);
-            if (!File.Exists(path))
+            foreach (var root in GetRootFolders())
             {
-                return [];
+                try
+                {
+                    var path = Path.Combine(root, FolderName, $"{key}.json");
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    var json = await File.ReadAllTextAsync(path, Encoding.UTF8);
+                    var payload = System.Text.Json.JsonSerializer.Deserialize<List<ChapterCacheEntry>>(json, SerializerOptions);
+                    if (payload is null)
+                    {
+                        continue;
+                    }
+
+                    return [.. payload.Select(c => new VideoChapter(c.Title, c.StartTime, c.EndTime))];
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"读取章节缓存失败: {ex.Message}");
+                }
             }
 
-            var json = await File.ReadAllTextAsync(path, Encoding.UTF8);
-            var payload = System.Text.Json.JsonSerializer.Deserialize<List<ChapterCacheEntry>>(json, SerializerOptions);
-            if (payload is null)
-            {
-                return [];
-            }
-
-            return [.. payload.Select(c => new VideoChapter(c.Title, c.StartTime, c.EndTime))];
-        }
-        catch
-        {
             return [];
+        }
+        finally
+        {
+            StorageLock.Release();
         }
     }
 
-    private static string GetFilePath(string key)
+    private static async Task<bool> TryMoveAsync(string source, string destination)
     {
-        var cacheOnDisk = SettingsToolkit.ReadLocalSetting(SettingNames.CacheOnDisk, false);
-        var cacheDir = SettingsToolkit.ReadLocalSetting(SettingNames.CacheDir, string.Empty);
-        var root = cacheOnDisk && !string.IsNullOrEmpty(cacheDir)
-            ? cacheDir
-            : ApplicationData.GetDefault().LocalCacheFolder.Path;
-        var folder = Path.Combine(root, FolderName);
-        Directory.CreateDirectory(folder);
-        return Path.Combine(folder, $"{key}.json");
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                File.Move(source, destination, true);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 2)
+                {
+                    System.Diagnostics.Debug.WriteLine($"写入章节缓存失败: {ex.Message}");
+                    return false;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(40 * (attempt + 1)));
+            }
+        }
+
+        return false;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>
+    /// 返回候选缓存根目录：用户指定目录优先，应用缓存目录兜底.
+    /// </summary>
+    private static List<string> GetRootFolders()
+    {
+        var roots = new List<string>();
+
+        try
+        {
+            var cacheOnDisk = SettingsToolkit.ReadLocalSetting(SettingNames.CacheOnDisk, false);
+            var cacheDir = SettingsToolkit.ReadLocalSetting(SettingNames.CacheDir, string.Empty);
+            if (cacheOnDisk && !string.IsNullOrWhiteSpace(cacheDir))
+            {
+                AddRoot(roots, cacheDir);
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            AddRoot(roots, ApplicationData.GetDefault().LocalCacheFolder.Path);
+        }
+        catch
+        {
+        }
+
+        return roots;
+    }
+
+    private static void AddRoot(List<string> roots, string path)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (!string.IsNullOrWhiteSpace(fullPath)
+                && !roots.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+            {
+                roots.Add(fullPath);
+            }
+        }
+        catch
+        {
+        }
     }
 }
 

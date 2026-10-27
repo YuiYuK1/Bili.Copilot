@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <local:PlayerControlBase
     x:Class="BiliCopilot.UI.Controls.Core.PlayerInteractivePanel"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -164,8 +164,8 @@
                     Style="{StaticResource ContextMenuFlyoutSubItemStyle}"
                     Text="ArtCNN">
                     <RadioMenuFlyoutItem
-                        Click="OnAnime4KItemClick"
-                        GroupName="Anime4KGroup"
+                        Click="OnArtCNNItemClick"
+                        GroupName="ArtCNNGroup"
                         Style="{StaticResource ContextMenuFlyoutRadioItemStyle}"
                         Tag="None"
                         Text="{ext:Locale Name=Unset}" />
